@@ -88,7 +88,7 @@ const walletSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Create index for better query performance
-walletSchema.index({ user: 1 });
+// walletSchema.index({ user: 1 }); // Removed duplicate index
 walletSchema.index({ 'transactions.createdAt': -1 });
 walletSchema.index({ 'transactions.status': 1 });
 

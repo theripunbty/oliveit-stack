@@ -45,7 +45,7 @@ const cartSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Create index for faster customer queries
-cartSchema.index({ customer: 1 });
+// cartSchema.index({ customer: 1 }); // Removed duplicate index
 
 // Create index for faster vendor queries
 cartSchema.index({ vendor: 1 });
