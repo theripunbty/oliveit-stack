@@ -55,22 +55,43 @@ const registerCustomer = async (req, res) => {
  */
 const registerVendor = async (req, res) => {
   try {
-    const { email, password, phone, firstName, lastName, location } = req.body;
+    const { 
+      fullName,
+      phone, 
+      email,
+      username,
+      password,
+      location,
+      storeDetails,
+      legalDocuments,
+      bankDetails
+    } = req.body;
 
     // Validate required fields
-    if (!email || !password) {
-      return sendError(res, 400, 'Email and password are required');
+    if (!fullName || !phone || !email || !username || !password) {
+      return sendError(res, 400, 'All required fields must be provided');
     }
 
     if (!location || !location.coordinates || location.coordinates.length !== 2) {
       return sendError(res, 400, 'Valid location coordinates are required');
     }
 
-    // Check if vendor already exists
-    const existingUser = await User.findOne({ email, role: USER_ROLES.VENDOR });
-    
-    if (existingUser) {
+    // Check if username already exists
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      return sendError(res, 409, 'Username already exists');
+    }
+
+    // Check if email already exists for vendors
+    const existingEmail = await User.findOne({ email, role: USER_ROLES.VENDOR });
+    if (existingEmail) {
       return sendError(res, 409, 'Vendor with this email already exists');
+    }
+
+    // Check if phone already exists for vendors
+    const existingPhone = await User.findOne({ phone, role: USER_ROLES.VENDOR });
+    if (existingPhone) {
+      return sendError(res, 409, 'Vendor with this phone number already exists');
     }
 
     // Get location name from coordinates
@@ -84,18 +105,44 @@ const registerVendor = async (req, res) => {
       // Continue with registration even if location name fetch fails
     }
 
+    // Process file paths from request
+    const profileImage = req.files && req.files.profileImage ? req.files.profileImage[0].path : null;
+    const storePhoto = req.files && req.files.storePhoto ? req.files.storePhoto[0].path : null;
+    const aadhaarPhoto = req.files && req.files.aadhaarPhoto ? req.files.aadhaarPhoto[0].path : null;
+    const panPhoto = req.files && req.files.panPhoto ? req.files.panPhoto[0].path : null;
+
     // Create new vendor
     const vendor = new User({
       role: USER_ROLES.VENDOR,
-      email,
-      password,
+      fullName,
       phone,
-      firstName,
-      lastName,
+      email,
+      username,
+      password,
+      profileImage,
       location: {
         type: 'Point',
         coordinates: location.coordinates,
         locationName
+      },
+      storeDetails: {
+        storeName: storeDetails?.storeName,
+        storeAddress: storeDetails?.storeAddress,
+        storeCategory: storeDetails?.storeCategory,
+        storePhoto
+      },
+      legalDocuments: {
+        aadhaarNumber: legalDocuments?.aadhaarNumber,
+        aadhaarPhoto,
+        panNumber: legalDocuments?.panNumber,
+        panPhoto,
+        gstinNumber: legalDocuments?.gstinNumber,
+        fssaiNumber: legalDocuments?.fssaiNumber
+      },
+      bankDetails: {
+        accountNumber: bankDetails?.accountNumber,
+        ifscCode: bankDetails?.ifscCode,
+        accountHolderName: bankDetails?.accountHolderName
       },
       status: USER_STATUS.PENDING // Vendors require admin approval
     });
@@ -105,7 +152,11 @@ const registerVendor = async (req, res) => {
     return sendSuccess(res, 201, 'Vendor registered successfully. Awaiting admin approval.', {
       vendor: {
         _id: vendor._id,
+        vendorId: vendor.vendorId,
+        fullName: vendor.fullName,
         email: vendor.email,
+        phone: vendor.phone,
+        username: vendor.username,
         role: vendor.role,
         status: vendor.status
       }
@@ -674,6 +725,342 @@ const logout = async (req, res) => {
   }
 };
 
+/**
+ * Verify OTP and complete vendor registration
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const verifyOTPAndRegisterVendor = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+
+    // Validate required fields
+    if (!phone || !otp) {
+      return sendError(res, 400, 'Phone number and OTP are required');
+    }
+
+    // Verify OTP
+    const isOTPValid = await verifyOTP(phone, otp);
+    if (!isOTPValid) {
+      return sendError(res, 400, 'Invalid or expired OTP');
+    }
+
+    // Get pending registration data
+    const registrationData = await redisClient.get(`vendor_registration:${phone}`);
+    if (!registrationData) {
+      return sendError(res, 400, 'Registration session expired. Please start again.');
+    }
+
+    const { fullName, location } = JSON.parse(registrationData);
+
+    // Get location name from coordinates
+    let locationName = '';
+    try {
+      const [longitude, latitude] = location.coordinates;
+      const addressInfo = await getAddressFromCoordinates(latitude, longitude);
+      locationName = addressInfo.fullAddress;
+    } catch (error) {
+      console.error('Error fetching location name:', error);
+      // Continue with registration even if location name fetch fails
+    }
+
+    // Create new vendor
+    const vendor = new User({
+      role: USER_ROLES.VENDOR,
+      phone,
+      fullName,
+      location: {
+        type: 'Point',
+        coordinates: location.coordinates,
+        locationName
+      },
+      status: USER_STATUS.PENDING // Vendors require admin approval
+    });
+
+    await vendor.save();
+
+    // Clean up Redis data
+    await redisClient.del(`vendor_registration:${phone}`);
+
+    return sendSuccess(res, 201, 'Vendor registered successfully. Awaiting admin approval.', {
+      vendor: {
+        _id: vendor._id,
+        phone: vendor.phone,
+        vendorId: vendor.vendorId,
+        fullName: vendor.fullName,
+        role: vendor.role,
+        status: vendor.status
+      }
+    });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Send OTP for vendor login
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const loginVendorSendOTP = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    // Validate required fields
+    if (!phone) {
+      return sendError(res, 400, 'Phone number is required');
+    }
+
+    // Find vendor by phone
+    const vendor = await User.findOne({ phone, role: USER_ROLES.VENDOR });
+    
+    if (!vendor) {
+      return sendError(res, 404, 'No vendor found with this phone number');
+    }
+
+    // Check if account is active
+    if (vendor.status === USER_STATUS.PENDING) {
+      return sendError(res, 403, 'Your account is pending approval. Please wait for admin verification.');
+    }
+
+    if (vendor.status === USER_STATUS.REJECTED) {
+      return sendError(res, 403, `Your account has been rejected. Reason: ${vendor.rejectionReason || 'Not specified'}`);
+    }
+
+    // Generate OTP and send to user
+    const otp = generateOTP();
+    await storeOTP(phone, otp);
+    await sendOTP(phone, otp);
+
+    return sendSuccess(res, 200, 'OTP sent successfully', { phone });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Verify OTP and login vendor
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const verifyOTPAndLoginVendor = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+
+    // Validate required fields
+    if (!phone || !otp) {
+      return sendError(res, 400, 'Phone number and OTP are required');
+    }
+
+    // Verify OTP
+    const isOTPValid = await verifyOTP(phone, otp);
+    if (!isOTPValid) {
+      return sendError(res, 400, 'Invalid or expired OTP');
+    }
+
+    // Find vendor by phone
+    const vendor = await User.findOne({ phone, role: USER_ROLES.VENDOR });
+    
+    if (!vendor) {
+      return sendError(res, 404, 'No vendor found with this phone number');
+    }
+
+    // Check if account is active
+    if (vendor.status === USER_STATUS.PENDING) {
+      return sendError(res, 403, 'Your account is pending approval. Please wait for admin verification.');
+    }
+
+    if (vendor.status === USER_STATUS.REJECTED) {
+      return sendError(res, 403, `Your account has been rejected. Reason: ${vendor.rejectionReason || 'Not specified'}`);
+    }
+
+    // Generate tokens
+    const accessToken = generateAccessToken({ userId: vendor._id, role: vendor.role });
+    const refreshToken = generateRefreshToken({ userId: vendor._id, role: vendor.role });
+
+    // Store refresh token with user
+    vendor.refreshToken = refreshToken;
+    await vendor.save();
+
+    return sendSuccess(res, 200, 'Login successful', {
+      user: {
+        _id: vendor._id,
+        phone: vendor.phone,
+        vendorId: vendor.vendorId,
+        fullName: vendor.fullName,
+        role: vendor.role
+      },
+      accessToken,
+      refreshToken
+    });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Login vendor with username and password
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const loginVendor = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // Validate required fields
+    if (!username || !password) {
+      return sendError(res, 400, 'Username and password are required');
+    }
+
+    // Find vendor by username
+    const vendor = await User.findOne({ username, role: USER_ROLES.VENDOR });
+    
+    if (!vendor) {
+      return sendError(res, 404, 'No vendor found with this username');
+    }
+
+    // Check if account is active
+    if (vendor.status === USER_STATUS.PENDING) {
+      return sendError(res, 403, 'Your account is pending approval. Please wait for admin verification.');
+    }
+
+    if (vendor.status === USER_STATUS.REJECTED) {
+      return sendError(res, 403, `Your account has been rejected. Reason: ${vendor.rejectionReason || 'Not specified'}`);
+    }
+
+    // Verify password
+    const isPasswordValid = await vendor.comparePassword(password);
+    
+    if (!isPasswordValid) {
+      return sendError(res, 401, 'Invalid password');
+    }
+
+    // Generate tokens
+    const accessToken = generateAccessToken({ userId: vendor._id, role: vendor.role });
+    const refreshToken = generateRefreshToken({ userId: vendor._id, role: vendor.role });
+
+    // Store refresh token with user
+    vendor.refreshToken = refreshToken;
+    await vendor.save();
+
+    return sendSuccess(res, 200, 'Login successful', {
+      user: {
+        _id: vendor._id,
+        vendorId: vendor.vendorId,
+        fullName: vendor.fullName,
+        email: vendor.email,
+        phone: vendor.phone,
+        username: vendor.username,
+        role: vendor.role
+      },
+      accessToken,
+      refreshToken
+    });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Forgot password - send reset token via email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const role = req.body.role || USER_ROLES.VENDOR; // Default to vendor role
+
+    // Validate required fields
+    if (!email) {
+      return sendError(res, 400, 'Email is required');
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email, role });
+    
+    if (!user) {
+      return sendError(res, 404, `No ${role} found with this email`);
+    }
+
+    // Generate random reset token (6 digit number)
+    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Set token expiry (30 minutes)
+    const resetTokenExpiry = Date.now() + 30 * 60 * 1000;
+    
+    // Store reset token in Redis with expiry
+    await redisClient.set(
+      `reset_token:${user._id}`,
+      JSON.stringify({ resetToken, resetTokenExpiry }),
+      'EX',
+      1800 // Expire in 30 minutes
+    );
+
+    // TODO: Implement actual email sending here
+    // For now, we'll simply log it to console
+    console.log(`[SIMULATED EMAIL] Password reset token for ${email}: ${resetToken}`);
+
+    return sendSuccess(res, 200, 'Password reset token sent to your email');
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Reset password using token
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const resetPassword = async (req, res) => {
+  try {
+    const { email, resetToken, newPassword } = req.body;
+    const role = req.body.role || USER_ROLES.VENDOR; // Default to vendor role
+
+    // Validate required fields
+    if (!email || !resetToken || !newPassword) {
+      return sendError(res, 400, 'Email, reset token and new password are required');
+    }
+
+    // Validate password strength
+    if (newPassword.length < 8) {
+      return sendError(res, 400, 'Password must be at least 8 characters long');
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email, role });
+    
+    if (!user) {
+      return sendError(res, 404, `No ${role} found with this email`);
+    }
+
+    // Get reset token from Redis
+    const tokenData = await redisClient.get(`reset_token:${user._id}`);
+    
+    if (!tokenData) {
+      return sendError(res, 400, 'Reset token is invalid or expired');
+    }
+
+    const { resetToken: storedToken, resetTokenExpiry } = JSON.parse(tokenData);
+    
+    // Check if token matches and is not expired
+    if (resetToken !== storedToken || Date.now() > resetTokenExpiry) {
+      return sendError(res, 400, 'Reset token is invalid or expired');
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    // Delete reset token from Redis
+    await redisClient.del(`reset_token:${user._id}`);
+
+    return sendSuccess(res, 200, 'Password has been reset successfully');
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
 module.exports = {
   registerCustomer,
   registerVendor,
@@ -685,5 +1072,11 @@ module.exports = {
   loginWithPassword,
   loginAdmin,
   refreshToken,
-  logout
+  logout,
+  verifyOTPAndRegisterVendor,
+  loginVendorSendOTP,
+  verifyOTPAndLoginVendor,
+  loginVendor,
+  forgotPassword,
+  resetPassword
 }; 

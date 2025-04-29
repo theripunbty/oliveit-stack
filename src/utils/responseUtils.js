@@ -76,8 +76,49 @@ const handleApiError = (res, error) => {
   );
 };
 
+/**
+ * Add full URLs to file paths
+ * @param {Object} obj - Object containing file paths
+ * @param {string} baseUrl - Base URL for the server
+ * @param {string[]} fields - Array of field names to check for file paths
+ * @returns {Object} - Object with full URLs added
+ */
+const addFileUrls = (obj, baseUrl, fields = []) => {
+  if (!obj || typeof obj !== 'object') return obj;
+  
+  const result = { ...obj };
+  
+  // If fields array is provided, only process those fields
+  if (fields.length > 0) {
+    fields.forEach(field => {
+      if (result[field] && typeof result[field] === 'string' && !result[field].startsWith('http')) {
+        result[`${field}Url`] = baseUrl + result[field];
+      }
+    });
+    return result;
+  }
+  
+  // Otherwise, process all string fields that look like file paths
+  // This is a simple heuristic - adjust as needed
+  Object.keys(result).forEach(key => {
+    if (
+      typeof result[key] === 'string' && 
+      (result[key].startsWith('uploads/') || result[key].includes('/uploads/')) &&
+      !key.endsWith('Url')
+    ) {
+      result[`${key}Url`] = baseUrl + result[key];
+    } else if (typeof result[key] === 'object' && result[key] !== null) {
+      // Recursively process nested objects
+      result[key] = addFileUrls(result[key], baseUrl);
+    }
+  });
+  
+  return result;
+};
+
 module.exports = {
   sendSuccess,
   sendError,
-  handleApiError
+  handleApiError,
+  addFileUrls
 }; 

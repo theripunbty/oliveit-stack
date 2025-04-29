@@ -3,14 +3,23 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 const { authLimiter, otpLimiter } = require('../middleware/rateLimiter');
+const { profileUpload, storeUpload, kycUpload } = require('../middleware/multerConfig');
 
 // Customer registration and login
 router.post('/register/customer', otpLimiter, authController.registerCustomer);
 router.post('/login/customer', otpLimiter, authController.loginWithOTP);
 
 // Vendor registration and login
-router.post('/register/vendor', authLimiter, authController.registerVendor);
-router.post('/login/vendor', authLimiter, authController.loginWithPassword);
+const vendorUploadFields = [
+  { name: 'profileImage', maxCount: 1 },
+  { name: 'storePhoto', maxCount: 1 },
+  { name: 'aadhaarPhoto', maxCount: 1 },
+  { name: 'panPhoto', maxCount: 1 }
+];
+router.post('/register/vendor', authLimiter, profileUpload.fields(vendorUploadFields), authController.registerVendor);
+router.post('/login/vendor', authLimiter, authController.loginVendor);
+router.post('/forgot-password', authLimiter, authController.forgotPassword);
+router.post('/reset-password', authLimiter, authController.resetPassword);
 
 // Delivery agent registration and login
 router.post('/register/delivery', otpLimiter, authController.registerDeliveryAgent);

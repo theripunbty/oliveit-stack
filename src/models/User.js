@@ -16,6 +16,26 @@ const USER_STATUS = {
   REJECTED: 'rejected'
 };
 
+// Define vendor category types
+const VENDOR_CATEGORIES = [
+  'Fruits & Vegetables',
+  'Dairy & Eggs',
+  'Meat & Seafood',
+  'Bakery & Breads',
+  'Pantry Staples',
+  'Snacks & Sweets',
+  'Beverages',
+  'Frozen Foods',
+  'Condiments & Sauces',
+  'Personal Care',
+  'Household Essentials',
+  'Baby Products',
+  'Health & Wellness',
+  'Pan Masala & Tobacco',
+  'Ready-to-Eat & Instant Foods',
+  'Electronics & Accessories'
+];
+
 const userSchema = new mongoose.Schema({
   role: {
     type: String,
@@ -35,19 +55,48 @@ const userSchema = new mongoose.Schema({
       message: 'Customer ID must be a 6-8 digit number'
     }
   },
+  vendorId: {
+    type: String,
+    unique: true,
+    sparse: true, // Only enforces uniqueness for documents that have this field
+    validate: {
+      validator: function(v) {
+        // Only validate for vendors
+        if (this.role !== USER_ROLES.VENDOR) return true;
+        return /^VEN\d{6,8}$/.test(v);
+      },
+      message: 'Vendor ID must be in format VEN followed by 6-8 digits'
+    }
+  },
   email: {
     type: String,
     trim: true,
     lowercase: true,
     validate: {
       validator: function(v) {
-        // Only required for vendors and admins
+        // Required for vendors and admins
         if (this.role === USER_ROLES.VENDOR || this.role === USER_ROLES.ADMIN) {
           return /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(v);
         }
         return true;
       },
       message: 'Please enter a valid email'
+    }
+  },
+  username: {
+    type: String,
+    trim: true,
+    unique: true,
+    sparse: true, // Only enforces uniqueness for documents that have this field
+    validate: {
+      validator: function(v) {
+        // Only required for vendors
+        if (this.role === USER_ROLES.VENDOR) {
+          return /^[a-zA-Z0-9_]{4,20}$/.test(v);
+        }
+        return true;
+      },
+      message: 'Username must be 4-20 characters (letters, numbers, underscore)'
     }
   },
   password: {
@@ -64,8 +113,8 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: function() {
-      // Phone is required for customers and delivery agents
-      return this.role === USER_ROLES.CUSTOMER || this.role === USER_ROLES.DELIVERY;
+      // Phone is required for all users
+      return true;
     },
     validate: {
       validator: function(v) {
@@ -73,6 +122,10 @@ const userSchema = new mongoose.Schema({
       },
       message: 'Please enter a valid 10-digit phone number'
     }
+  },
+  fullName: {
+    type: String,
+    trim: true
   },
   firstName: {
     type: String,
@@ -98,6 +151,86 @@ const userSchema = new mongoose.Schema({
   },
   rejectionReason: {
     type: String
+  },
+  // Vendor specific fields
+  storeDetails: {
+    storeName: {
+      type: String,
+      trim: true
+    },
+    storeAddress: {
+      type: String,
+      trim: true
+    },
+    storeCategory: {
+      type: String,
+      enum: VENDOR_CATEGORIES
+    },
+    storePhoto: {
+      type: String
+    }
+  },
+  // Vendor legal documents
+  legalDocuments: {
+    aadhaarNumber: {
+      type: String,
+      validate: {
+        validator: function(v) {
+          if (!v) return true;
+          return /^\d{12}$/.test(v);
+        },
+        message: 'Aadhaar number must be 12 digits'
+      }
+    },
+    aadhaarPhoto: {
+      type: String
+    },
+    panNumber: {
+      type: String,
+      validate: {
+        validator: function(v) {
+          if (!v) return true;
+          return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v);
+        },
+        message: 'PAN number must be in valid format (e.g. ABCDE1234F)'
+      }
+    },
+    panPhoto: {
+      type: String
+    },
+    gstinNumber: {
+      type: String,
+      validate: {
+        validator: function(v) {
+          if (!v) return true;
+          return /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/.test(v);
+        },
+        message: 'GSTIN must be in valid format'
+      }
+    },
+    fssaiNumber: {
+      type: String
+    }
+  },
+  // Bank details
+  bankDetails: {
+    accountNumber: {
+      type: String
+    },
+    ifscCode: {
+      type: String,
+      validate: {
+        validator: function(v) {
+          if (!v) return true;
+          return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(v);
+        },
+        message: 'IFSC code must be in valid format'
+      }
+    },
+    accountHolderName: {
+      type: String,
+      trim: true
+    }
   },
   kycDocuments: [{
     type: {
@@ -162,6 +295,23 @@ userSchema.pre('save', async function(next) {
     }
   }
   
+  // Generate vendorId for new vendor users
+  if (this.isNew && this.role === USER_ROLES.VENDOR && !this.vendorId) {
+    try {
+      const randomDigits = Math.floor(100000 + Math.random() * 900000).toString();
+      this.vendorId = `VEN${randomDigits}`;
+      
+      // Check if vendorId already exists and regenerate if needed
+      const existingVendor = await mongoose.models.User.findOne({ vendorId: this.vendorId });
+      if (existingVendor) {
+        const newRandomDigits = Math.floor(100000 + Math.random() * 900000).toString();
+        this.vendorId = `VEN${newRandomDigits}`;
+      }
+    } catch (error) {
+      return next(error);
+    }
+  }
+  
   next();
 });
 
@@ -181,5 +331,6 @@ const User = mongoose.model('User', userSchema);
 module.exports = {
   User,
   USER_ROLES,
-  USER_STATUS
+  USER_STATUS,
+  VENDOR_CATEGORIES
 }; 

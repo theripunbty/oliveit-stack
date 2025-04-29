@@ -93,7 +93,7 @@ const getVendorDetails = async (req, res) => {
     const revenueData = await Order.aggregate([
       {
         $match: {
-          vendor: vendor._id,
+          vendor: mongoose.Types.ObjectId(vendorId),
           status: ORDER_STATUS.DELIVERED
         }
       },
@@ -107,8 +107,46 @@ const getVendorDetails = async (req, res) => {
     
     const totalRevenue = revenueData.length > 0 ? revenueData[0].totalRevenue : 0;
     
+    // Create URLs for all vendor documents
+    const baseUrl = `${req.protocol}://${req.get('host')}/`;
+    
+    const vendorData = vendor.toObject();
+    
+    // Add URLs for profile image
+    if (vendorData.profileImage) {
+      vendorData.profileImageUrl = baseUrl + vendorData.profileImage;
+    }
+    
+    // Add URLs for store photo
+    if (vendorData.storeDetails && vendorData.storeDetails.storePhoto) {
+      vendorData.storeDetails.storePhotoUrl = baseUrl + vendorData.storeDetails.storePhoto;
+    }
+    
+    // Add URLs for legal documents
+    if (vendorData.legalDocuments) {
+      if (vendorData.legalDocuments.aadhaarPhoto) {
+        vendorData.legalDocuments.aadhaarPhotoUrl = baseUrl + vendorData.legalDocuments.aadhaarPhoto;
+      }
+      if (vendorData.legalDocuments.panPhoto) {
+        vendorData.legalDocuments.panPhotoUrl = baseUrl + vendorData.legalDocuments.panPhoto;
+      }
+    }
+    
+    // Add URLs for KYC documents
+    if (vendorData.kycDocuments && vendorData.kycDocuments.length > 0) {
+      vendorData.kycDocuments = vendorData.kycDocuments.map(doc => {
+        if (doc.documentUrl) {
+          return {
+            ...doc,
+            documentFullUrl: baseUrl + doc.documentUrl
+          };
+        }
+        return doc;
+      });
+    }
+    
     return sendSuccess(res, 200, 'Vendor details retrieved successfully', {
-      vendor,
+      vendor: vendorData,
       stats: {
         productsCount,
         ordersCount,
@@ -1402,6 +1440,77 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
+/**
+ * Get vendor documents
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getVendorDocuments = async (req, res) => {
+  try {
+    const vendorId = req.params.id;
+    
+    // Get vendor details with focus on documents
+    const vendor = await User.findOne({
+      _id: vendorId,
+      role: USER_ROLES.VENDOR
+    }).select('_id fullName vendorId profileImage storeDetails.storePhoto legalDocuments kycDocuments');
+    
+    if (!vendor) {
+      return sendError(res, 404, 'Vendor not found');
+    }
+    
+    // Create URLs for all vendor documents
+    const baseUrl = `${req.protocol}://${req.get('host')}/`;
+    const vendorData = vendor.toObject();
+    
+    // Organize all documents in a structured format
+    const documents = {
+      profile: {
+        profileImage: vendorData.profileImage ? {
+          path: vendorData.profileImage,
+          url: baseUrl + vendorData.profileImage
+        } : null
+      },
+      store: {
+        storePhoto: vendorData.storeDetails?.storePhoto ? {
+          path: vendorData.storeDetails.storePhoto,
+          url: baseUrl + vendorData.storeDetails.storePhoto
+        } : null
+      },
+      legal: {
+        aadhaarPhoto: vendorData.legalDocuments?.aadhaarPhoto ? {
+          path: vendorData.legalDocuments.aadhaarPhoto,
+          url: baseUrl + vendorData.legalDocuments.aadhaarPhoto,
+          aadhaarNumber: vendorData.legalDocuments.aadhaarNumber
+        } : null,
+        panPhoto: vendorData.legalDocuments?.panPhoto ? {
+          path: vendorData.legalDocuments.panPhoto,
+          url: baseUrl + vendorData.legalDocuments.panPhoto,
+          panNumber: vendorData.legalDocuments.panNumber
+        } : null
+      },
+      kyc: Array.isArray(vendorData.kycDocuments) ? 
+        vendorData.kycDocuments.map(doc => ({
+          type: doc.type,
+          path: doc.documentUrl,
+          url: doc.documentUrl ? baseUrl + doc.documentUrl : null,
+          status: doc.verificationStatus
+        })) : []
+    };
+    
+    return sendSuccess(res, 200, 'Vendor documents retrieved successfully', {
+      vendor: {
+        _id: vendorData._id,
+        fullName: vendorData.fullName,
+        vendorId: vendorData.vendorId
+      },
+      documents
+    });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
 module.exports = {
   getVendors,
   getVendorDetails,
@@ -1431,5 +1540,6 @@ module.exports = {
   deleteBanner,
   getSystemSettings,
   updateSystemSettings,
-  getAuditLogs
+  getAuditLogs,
+  getVendorDocuments
 }; 
