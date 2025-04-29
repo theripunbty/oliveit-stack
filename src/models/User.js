@@ -18,11 +18,11 @@ const USER_STATUS = {
 
 // Define vendor category types
 const VENDOR_CATEGORIES = [
-  "Grocery", 
-  "Electronics", 
-  "Fashion", 
-  "Food", 
-  "Other"
+  "grocery", 
+  "electronics", 
+  "fashion", 
+  "food", 
+  "other"
 ];
 
 const userSchema = new mongoose.Schema({

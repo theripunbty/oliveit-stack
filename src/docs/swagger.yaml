@@ -333,13 +333,7 @@ paths:
                       description: Complete address of the store
                     storeCategory:
                       type: string
-                      enum: [
-                        "Grocery", 
-                        "Electronics", 
-                        "Fashion", 
-                        "Food", 
-                        "Other"
-                      ]
+                      enum: [grocery, electronics, fashion, food, other]
                       description: Store category
                 legalDocuments:
                   type: object
