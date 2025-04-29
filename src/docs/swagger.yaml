@@ -333,7 +333,22 @@ paths:
                       description: Complete address of the store
                     storeCategory:
                       type: string
-                      enum: [grocery, electronics, fashion, food, other]
+                      enum: [
+                        fruits_vegetables,
+                        dairy_eggs,
+                        meat_seafood,
+                        bakery,
+                        pantry,
+                        snacks,
+                        beverages,
+                        frozen_foods,
+                        personal_care,
+                        household,
+                        baby_products,
+                        health_wellness,
+                        ready_to_eat,
+                        other
+                      ]
                       description: Store category
                 legalDocuments:
                   type: object

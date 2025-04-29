@@ -18,10 +18,19 @@ const USER_STATUS = {
 
 // Define vendor category types
 const VENDOR_CATEGORIES = [
-  "grocery", 
-  "electronics", 
-  "fashion", 
-  "food", 
+  "fruits_vegetables",
+  "dairy_eggs",
+  "meat_seafood",
+  "bakery",
+  "pantry",
+  "snacks",
+  "beverages",
+  "frozen_foods",
+  "personal_care",
+  "household",
+  "baby_products",
+  "health_wellness",
+  "ready_to_eat",
   "other"
 ];
 
