@@ -334,22 +334,11 @@ paths:
                     storeCategory:
                       type: string
                       enum: [
-                        "Fruits & Vegetables",
-                        "Dairy & Eggs",
-                        "Meat & Seafood",
-                        "Bakery & Breads",
-                        "Pantry Staples",
-                        "Snacks & Sweets",
-                        "Beverages",
-                        "Frozen Foods",
-                        "Condiments & Sauces",
-                        "Personal Care",
-                        "Household Essentials",
-                        "Baby Products",
-                        "Health & Wellness",
-                        "Pan Masala & Tobacco",
-                        "Ready-to-Eat & Instant Foods",
-                        "Electronics & Accessories"
+                        "Grocery", 
+                        "Electronics", 
+                        "Fashion", 
+                        "Food", 
+                        "Other"
                       ]
                       description: Store category
                 legalDocuments:
