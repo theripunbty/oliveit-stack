@@ -18,22 +18,22 @@ const USER_STATUS = {
 
 // Define vendor category types
 const VENDOR_CATEGORIES = [
-  'Fruits & Vegetables',
-  'Dairy & Eggs',
-  'Meat & Seafood',
-  'Bakery & Breads',
-  'Pantry Staples',
-  'Snacks & Sweets',
-  'Beverages',
-  'Frozen Foods',
-  'Condiments & Sauces',
-  'Personal Care',
-  'Household Essentials',
-  'Baby Products',
-  'Health & Wellness',
-  'Pan Masala & Tobacco',
-  'Ready-to-Eat & Instant Foods',
-  'Electronics & Accessories'
+  "Fruits & Vegetables",
+  "Dairy & Eggs",
+  "Meat & Seafood",
+  "Bakery & Breads",
+  "Pantry Staples",
+  "Snacks & Sweets",
+  "Beverages",
+  "Frozen Foods",
+  "Condiments & Sauces",
+  "Personal Care",
+  "Household Essentials",
+  "Baby Products",
+  "Health & Wellness",
+  "Pan Masala & Tobacco",
+  "Ready-to-Eat & Instant Foods",
+  "Electronics & Accessories"
 ];
 
 const userSchema = new mongoose.Schema({
