@@ -16,7 +16,7 @@ const USER_STATUS = {
   REJECTED: 'rejected'
 };
 
-// Define vendor category types
+// Define vendor category types - fixed syntax to use square brackets
 const VENDOR_CATEGORIES = [
   "fruits_vegetables",
   "dairy_eggs",
