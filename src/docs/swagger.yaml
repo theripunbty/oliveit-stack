@@ -334,19 +334,22 @@ paths:
                     storeCategory:
                       type: string
                       enum: [
-                        fruits_vegetables,
-                        dairy_eggs,
-                        meat_seafood,
+                        fruits,
+                        vegetables,
+                        dairy,
+                        eggs,
+                        meat,
+                        seafood,
                         bakery,
                         pantry,
                         snacks,
                         beverages,
-                        frozen_foods,
-                        personal_care,
+                        frozen,
+                        personal,
                         household,
-                        baby_products,
-                        health_wellness,
-                        ready_to_eat,
+                        baby,
+                        health,
+                        ready,
                         other
                       ]
                       description: Store category
