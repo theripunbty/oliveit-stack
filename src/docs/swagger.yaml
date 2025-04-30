@@ -352,12 +352,11 @@ paths:
                       description: [longitude, latitude]
                 storeDetails:
                   type: object
-                  example: {
-                    "storeName": "Fresh Fruits Store",
-                    "storeAddress": "123 Main St, Mumbai",
-                    "storeCategory": "fruits",
-                    "businessEntityType": "Individual/Proprietorship"
-                  }
+                  example:
+                    storeName: "Fresh Fruits Store"
+                    storeAddress: "123 Main St, Mumbai"
+                    storeCategory: "fruits"
+                    businessEntityType: "Individual/Proprietorship"
                   properties:
                     storeName:
                       type: string
@@ -428,10 +427,9 @@ paths:
                       description: Name of the account holder
                 upiDetails:
                   type: object
-                  example: {
-                    "upiId": "vendor@okicici",
-                    "preferredApp": "GPay"
-                  }
+                  example:
+                    upiId: "vendor@okicici"
+                    preferredApp: "GPay"
                   properties:
                     upiId:
                       type: string
@@ -2020,12 +2018,11 @@ paths:
                   type: string
                 storeDetails:
                   type: object
-                  example: {
-                    "storeName": "Fresh Fruits Store",
-                    "storeAddress": "123 Main St, Mumbai",
-                    "storeCategory": "fruits",
-                    "businessEntityType": "Individual/Proprietorship"
-                  }
+                  example:
+                    storeName: "Fresh Fruits Store"
+                    storeAddress: "123 Main St, Mumbai"
+                    storeCategory: "fruits"
+                    businessEntityType: "Individual/Proprietorship"
                   properties:
                     storeName:
                       type: string
@@ -2085,10 +2082,9 @@ paths:
                       type: string
                 upiDetails:
                   type: object
-                  example: {
-                    "upiId": "vendor@okicici",
-                    "preferredApp": "GPay"
-                  }
+                  example:
+                    upiId: "vendor@okicici"
+                    preferredApp: "GPay"
                   properties:
                     upiId:
                       type: string
