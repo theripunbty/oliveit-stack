@@ -9,6 +9,7 @@ router.use(authenticate, isVendor);
 
 // Profile management
 router.get('/profile', vendorController.getProfile);
+router.put('/profile', vendorController.updateProfile);
 router.put('/profile/update', vendorController.updateProfile);
 
 // Product management

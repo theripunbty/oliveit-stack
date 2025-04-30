@@ -5,6 +5,7 @@ const { Order, ORDER_STATUS } = require('../models/Order');
 const { sendSuccess, sendError, handleApiError } = require('../utils/responseUtils');
 const Promotion = require('../models/Promotion');
 const { Wallet, TRANSACTION_TYPES, TRANSACTION_CATEGORIES } = require('../models/Wallet');
+const { getAddressFromCoordinates } = require('../utils/locationUtils');
 
 /**
  * Get vendor profile
@@ -36,14 +37,64 @@ const getProfile = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const vendorId = req.user._id;
-    const { firstName, lastName, phone, location } = req.body;
+    const { 
+      fullName, 
+      phone, 
+      email, 
+      storeDetails, 
+      location, 
+      bankDetails,
+      upiDetails
+    } = req.body;
     
     // Create update object with only allowed fields
     const updateData = {};
-    if (firstName) updateData.firstName = firstName;
-    if (lastName) updateData.lastName = lastName;
+    if (fullName) updateData.fullName = fullName;
     if (phone) updateData.phone = phone;
-    if (location) updateData.location = location;
+    if (email) updateData.email = email;
+    
+    // Handle store details
+    if (storeDetails) {
+      updateData.storeDetails = {};
+      if (storeDetails.storeName) updateData.storeDetails.storeName = storeDetails.storeName;
+      if (storeDetails.storeAddress) updateData.storeDetails.storeAddress = storeDetails.storeAddress;
+      if (storeDetails.storeCategory) updateData.storeDetails.storeCategory = storeDetails.storeCategory;
+      if (storeDetails.businessEntityType) updateData.storeDetails.businessEntityType = storeDetails.businessEntityType;
+    }
+    
+    // Handle location update
+    if (location && location.coordinates && location.coordinates.length === 2) {
+      // Get location name from coordinates
+      let locationName = '';
+      try {
+        const [longitude, latitude] = location.coordinates;
+        const addressInfo = await getAddressFromCoordinates(latitude, longitude);
+        locationName = addressInfo.fullAddress;
+      } catch (error) {
+        console.error('Error fetching location name:', error);
+      }
+      
+      updateData.location = {
+        type: 'Point',
+        coordinates: location.coordinates,
+        locationName
+      };
+    }
+    
+    // Handle bank details
+    if (bankDetails) {
+      updateData.bankDetails = {};
+      if (bankDetails.accountNumber) updateData.bankDetails.accountNumber = bankDetails.accountNumber;
+      if (bankDetails.ifscCode) updateData.bankDetails.ifscCode = bankDetails.ifscCode;
+      if (bankDetails.accountHolderName) updateData.bankDetails.accountHolderName = bankDetails.accountHolderName;
+    }
+    
+    // Handle UPI details
+    if (upiDetails) {
+      updateData.upiDetails = {};
+      if (upiDetails.upiId) updateData.upiDetails.upiId = upiDetails.upiId;
+      if (upiDetails.preferredApp) updateData.upiDetails.preferredApp = upiDetails.preferredApp;
+    }
     
     // Update vendor data
     const vendor = await User.findByIdAndUpdate(

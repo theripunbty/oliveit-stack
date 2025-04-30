@@ -64,7 +64,8 @@ const registerVendor = async (req, res) => {
       location,
       storeDetails,
       legalDocuments,
-      bankDetails
+      bankDetails,
+      upiDetails
     } = req.body;
 
     // Validate required fields
@@ -129,7 +130,8 @@ const registerVendor = async (req, res) => {
         storeName: storeDetails?.storeName,
         storeAddress: storeDetails?.storeAddress,
         storeCategory: storeDetails?.storeCategory,
-        storePhoto
+        storePhoto,
+        businessEntityType: storeDetails?.businessEntityType
       },
       legalDocuments: {
         aadhaarNumber: legalDocuments?.aadhaarNumber,
@@ -143,6 +145,10 @@ const registerVendor = async (req, res) => {
         accountNumber: bankDetails?.accountNumber,
         ifscCode: bankDetails?.ifscCode,
         accountHolderName: bankDetails?.accountHolderName
+      },
+      upiDetails: {
+        upiId: upiDetails?.upiId,
+        preferredApp: upiDetails?.preferredApp
       },
       status: USER_STATUS.PENDING // Vendors require admin approval
     });

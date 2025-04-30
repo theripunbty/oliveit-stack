@@ -37,6 +37,29 @@ const VENDOR_CATEGORIES = [
   "other"
 ];
 
+// Define UPI apps
+const UPI_APPS = [
+  "GPay",
+  "PhonePe",
+  "Paytm",
+  "Amazon Pay",
+  "BHIM",
+  "Other"
+];
+
+// Define business entity types
+const BUSINESS_ENTITIES = [
+  "Individual/Proprietorship",
+  "Partnership",
+  "Limited Liability Partnership (LLP)",
+  "Private Limited Company",
+  "Public Limited Company",
+  "One Person Company",
+  "Trust",
+  "Society",
+  "Other"
+];
+
 const userSchema = new mongoose.Schema({
   role: {
     type: String,
@@ -169,6 +192,10 @@ const userSchema = new mongoose.Schema({
     },
     storePhoto: {
       type: String
+    },
+    businessEntityType: {
+      type: String,
+      enum: BUSINESS_ENTITIES
     }
   },
   // Vendor legal documents
@@ -231,6 +258,25 @@ const userSchema = new mongoose.Schema({
     accountHolderName: {
       type: String,
       trim: true
+    }
+  },
+  // UPI payment details
+  upiDetails: {
+    upiId: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function(v) {
+          if (!v) return true;
+          // UPI ID format validation (basic pattern)
+          return /^[\w\.\-]{3,}@[a-zA-Z]{3,}$/i.test(v);
+        },
+        message: 'UPI ID must be in valid format (e.g., name@upi)'
+      }
+    },
+    preferredApp: {
+      type: String,
+      enum: UPI_APPS
     }
   },
   kycDocuments: [{
@@ -333,5 +379,7 @@ module.exports = {
   User,
   USER_ROLES,
   USER_STATUS,
-  VENDOR_CATEGORIES
+  VENDOR_CATEGORIES,
+  UPI_APPS,
+  BUSINESS_ENTITIES
 }; 
