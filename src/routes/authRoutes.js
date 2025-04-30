@@ -33,7 +33,7 @@ router.post('/login/admin', authLimiter, authController.loginAdmin);
 router.post('/verify-otp', otpLimiter, authController.verifyOTPAndLogin);
 router.post('/verify-otp/register', otpLimiter, authController.verifyOTPAndRegister);
 router.post('/verify-otp/register/vendor', otpLimiter, authController.verifyOTPAndRegisterVendor);
-router.post('/verify-otp/register/delivery', otpLimiter, authController.verifyOTPAndRegisterDeliveryAgent);
+router.post('/verify-otp/register/delivery', otpLimiter, authController.verifyOTPAndRegister);
 router.post('/verify-otp/login/vendor', otpLimiter, authController.verifyOTPAndLoginVendor);
 
 // Username availability check

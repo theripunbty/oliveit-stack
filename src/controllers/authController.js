@@ -1239,7 +1239,6 @@ module.exports = {
   registerAdmin,
   verifyOTPAndRegister,
   verifyOTPAndRegisterVendor,
-  verifyOTPAndRegisterDeliveryAgent,
   loginWithOTP,
   verifyOTPAndLogin,
   loginWithPassword,
