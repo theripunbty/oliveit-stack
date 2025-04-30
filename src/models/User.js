@@ -16,21 +16,24 @@ const USER_STATUS = {
   REJECTED: 'rejected'
 };
 
-// Define vendor category types - updated with hyphens instead of underscores
+// Define vendor category types - simplified to single words
 const VENDOR_CATEGORIES = [
-  "fruits-vegetables",
-  "dairy-eggs",
-  "meat-seafood",
+  "fruits",
+  "vegetables",
+  "dairy",
+  "eggs",
+  "meat",
+  "seafood",
   "bakery",
   "pantry",
   "snacks",
   "beverages",
-  "frozen-foods",
-  "personal-care",
+  "frozen",
+  "personal",
   "household",
-  "baby-products",
-  "health-wellness",
-  "ready-to-eat",
+  "baby",
+  "health",
+  "ready",
   "other"
 ];
 
