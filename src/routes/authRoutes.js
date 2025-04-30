@@ -37,4 +37,8 @@ router.post('/verify-otp/register', otpLimiter, authController.verifyOTPAndRegis
 router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', authenticate, authController.logout);
 
+// User location
+router.get('/user/location', authenticate, authController.getUserLocation);
+router.put('/user/location', authenticate, authController.updateUserLocation);
+
 module.exports = router; 

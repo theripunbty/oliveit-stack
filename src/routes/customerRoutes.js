@@ -33,6 +33,10 @@ router.put('/orders/:id/cancel', customerController.cancelOrder);
 router.post('/orders/:id/rate', customerController.rateOrder);
 router.get('/orders/:id/track', customerController.trackOrder);
 
+// Location endpoints
+router.put('/location', customerController.updateLocation);
+router.get('/location', customerController.getLocation);
+
 // Order tracking (Socket.IO connection will be handled separately)
 
 module.exports = router; 

@@ -149,7 +149,7 @@ const registerVendor = async (req, res) => {
 
     await vendor.save();
 
-    return sendSuccess(res, 201, 'Vendor registered successfully. Awaiting admin approval.', {
+    return sendSuccess(res, 201, 'Registration successful! Your application is under review and you will be notified once approved. You will be able to login using your username and password after approval.', {
       vendor: {
         _id: vendor._id,
         vendorId: vendor.vendorId,
@@ -437,11 +437,11 @@ const loginWithOTP = async (req, res) => {
 
     // Check user status
     if (user.status === USER_STATUS.PENDING) {
-      return sendError(res, 403, 'Your account is pending approval. Please wait for admin verification.');
+      return sendError(res, 403, 'Your application is under review. You will be notified once approved. Thank you for your patience.');
     }
 
     if (user.status === USER_STATUS.REJECTED) {
-      return sendError(res, 403, `Your account has been rejected. Reason: ${user.rejectionReason || 'Not specified'}`);
+      return sendError(res, 403, `Your application has been declined. Reason: ${user.rejectionReason || 'Not specified'}. Please contact support for more information.`);
     }
 
     // Generate and send OTP
@@ -537,11 +537,11 @@ const loginWithPassword = async (req, res) => {
 
     // Check if account is active
     if (user.status === USER_STATUS.PENDING) {
-      return sendError(res, 403, 'Your account is pending approval. Please wait for admin verification.');
+      return sendError(res, 403, 'Your application is under review. You will be notified once approved. Thank you for your patience.');
     }
 
     if (user.status === USER_STATUS.REJECTED) {
-      return sendError(res, 403, `Your account has been rejected. Reason: ${user.rejectionReason || 'Not specified'}`);
+      return sendError(res, 403, `Your application has been declined. Reason: ${user.rejectionReason || 'Not specified'}. Please contact support for more information.`);
     }
 
     // Verify password
@@ -782,12 +782,14 @@ const verifyOTPAndRegisterVendor = async (req, res) => {
     // Clean up Redis data
     await redisClient.del(`vendor_registration:${phone}`);
 
-    return sendSuccess(res, 201, 'Vendor registered successfully. Awaiting admin approval.', {
+    return sendSuccess(res, 201, 'Registration successful! Your application is under review and you will be notified once approved. You will be able to login using your username and password after approval.', {
       vendor: {
         _id: vendor._id,
-        phone: vendor.phone,
         vendorId: vendor.vendorId,
         fullName: vendor.fullName,
+        email: vendor.email,
+        phone: vendor.phone,
+        username: vendor.username,
         role: vendor.role,
         status: vendor.status
       }
@@ -820,11 +822,11 @@ const loginVendorSendOTP = async (req, res) => {
 
     // Check if account is active
     if (vendor.status === USER_STATUS.PENDING) {
-      return sendError(res, 403, 'Your account is pending approval. Please wait for admin verification.');
+      return sendError(res, 403, 'Your application is under review. You will be notified once approved. Thank you for your patience.');
     }
 
     if (vendor.status === USER_STATUS.REJECTED) {
-      return sendError(res, 403, `Your account has been rejected. Reason: ${vendor.rejectionReason || 'Not specified'}`);
+      return sendError(res, 403, `Your application has been declined. Reason: ${vendor.rejectionReason || 'Not specified'}. Please contact support for more information.`);
     }
 
     // Generate OTP and send to user
@@ -867,11 +869,11 @@ const verifyOTPAndLoginVendor = async (req, res) => {
 
     // Check if account is active
     if (vendor.status === USER_STATUS.PENDING) {
-      return sendError(res, 403, 'Your account is pending approval. Please wait for admin verification.');
+      return sendError(res, 403, 'Your application is under review. You will be notified once approved. Thank you for your patience.');
     }
 
     if (vendor.status === USER_STATUS.REJECTED) {
-      return sendError(res, 403, `Your account has been rejected. Reason: ${vendor.rejectionReason || 'Not specified'}`);
+      return sendError(res, 403, `Your application has been declined. Reason: ${vendor.rejectionReason || 'Not specified'}. Please contact support for more information.`);
     }
 
     // Generate tokens
@@ -921,11 +923,11 @@ const loginVendor = async (req, res) => {
 
     // Check if account is active
     if (vendor.status === USER_STATUS.PENDING) {
-      return sendError(res, 403, 'Your account is pending approval. Please wait for admin verification.');
+      return sendError(res, 403, 'Your application is under review. You will be notified once approved. Thank you for your patience.');
     }
 
     if (vendor.status === USER_STATUS.REJECTED) {
-      return sendError(res, 403, `Your account has been rejected. Reason: ${vendor.rejectionReason || 'Not specified'}`);
+      return sendError(res, 403, `Your application has been declined. Reason: ${vendor.rejectionReason || 'Not specified'}. Please contact support for more information.`);
     }
 
     // Verify password
@@ -997,11 +999,17 @@ const forgotPassword = async (req, res) => {
       1800 // Expire in 30 minutes
     );
 
+    // For vendors, include the username in the response
+    let responseMessage = 'Password reset token sent to your email';
+    if (role === USER_ROLES.VENDOR) {
+      responseMessage = `Password reset token sent to your email. After resetting, you will login with username '${user.username}' and your new password.`;
+    }
+
     // TODO: Implement actual email sending here
     // For now, we'll simply log it to console
     console.log(`[SIMULATED EMAIL] Password reset token for ${email}: ${resetToken}`);
 
-    return sendSuccess(res, 200, 'Password reset token sent to your email');
+    return sendSuccess(res, 200, responseMessage);
   } catch (error) {
     return handleApiError(res, error);
   }
@@ -1055,7 +1063,135 @@ const resetPassword = async (req, res) => {
     // Delete reset token from Redis
     await redisClient.del(`reset_token:${user._id}`);
 
-    return sendSuccess(res, 200, 'Password has been reset successfully');
+    let successMessage = 'Password has been reset successfully';
+    if (role === USER_ROLES.VENDOR) {
+      successMessage = `Password has been reset successfully. Remember to login with your username '${user.username}' and your new password.`;
+    }
+
+    return sendSuccess(res, 200, successMessage);
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Get user location based on user role
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getUserLocation = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const userRole = req.user.role;
+    
+    // Try to get from Redis first (most up-to-date) based on role
+    let redisKey = '';
+    if (userRole === USER_ROLES.CUSTOMER) {
+      redisKey = `customer_location:${userId}`;
+    } else if (userRole === USER_ROLES.DELIVERY) {
+      redisKey = `delivery_location:${userId}`;
+    } else if (userRole === USER_ROLES.VENDOR) {
+      redisKey = `vendor_location:${userId}`;
+    }
+    
+    if (redisKey) {
+      const redisLocation = await redisClient.get(redisKey);
+      if (redisLocation) {
+        const locationData = JSON.parse(redisLocation);
+        return sendSuccess(res, 200, 'Location retrieved successfully', { location: locationData });
+      }
+    }
+    
+    // If not in Redis, get from database
+    const user = await User.findById(userId).select('location role');
+    
+    if (!user) {
+      return sendError(res, 404, 'User not found');
+    }
+    
+    return sendSuccess(res, 200, 'Location retrieved successfully', { 
+      location: user.location,
+      role: user.role
+    });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Update user location based on user role
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const updateUserLocation = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const userRole = req.user.role;
+    const { coordinates } = req.body;
+    
+    // Validate coordinates
+    if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
+      return sendError(res, 400, 'Valid coordinates are required [longitude, latitude]');
+    }
+    
+    // Get location name from coordinates
+    let locationName = '';
+    try {
+      const [longitude, latitude] = coordinates;
+      const addressInfo = await getAddressFromCoordinates(latitude, longitude);
+      locationName = addressInfo.fullAddress;
+    } catch (error) {
+      console.error('Error fetching location name:', error);
+      // Continue with location update even if location name fetch fails
+    }
+    
+    // Update location in database
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        location: {
+          type: 'Point',
+          coordinates,
+          locationName
+        }
+      },
+      { new: true }
+    ).select('location role');
+    
+    if (!user) {
+      return sendError(res, 404, 'User not found');
+    }
+    
+    // Determine the appropriate Redis key based on user role
+    let redisKey = '';
+    if (userRole === USER_ROLES.CUSTOMER) {
+      redisKey = `customer_location:${userId}`;
+    } else if (userRole === USER_ROLES.DELIVERY) {
+      redisKey = `delivery_location:${userId}`;
+    } else if (userRole === USER_ROLES.VENDOR) {
+      redisKey = `vendor_location:${userId}`;
+    }
+    
+    // Store in Redis for real-time access
+    if (redisKey) {
+      await redisClient.set(
+        redisKey,
+        JSON.stringify({
+          userId,
+          coordinates,
+          locationName,
+          role: userRole,
+          updatedAt: new Date()
+        }),
+        'EX',
+        300 // Expire in 5 minutes if not updated
+      );
+    }
+    
+    return sendSuccess(res, 200, 'Location updated successfully', { 
+      location: user.location,
+      role: user.role
+    });
   } catch (error) {
     return handleApiError(res, error);
   }
@@ -1078,5 +1214,7 @@ module.exports = {
   verifyOTPAndLoginVendor,
   loginVendor,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  getUserLocation,
+  updateUserLocation
 }; 

@@ -982,6 +982,97 @@ const calculateDeliveryFee = (customerCoords, vendorCoords) => {
   return Math.ceil(baseFee + (distanceInKm * perKmFee));
 };
 
+/**
+ * Update customer location
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const updateLocation = async (req, res) => {
+  try {
+    const customerId = req.user._id;
+    const { coordinates } = req.body;
+    
+    // Validate coordinates
+    if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
+      return sendError(res, 400, 'Valid coordinates are required [longitude, latitude]');
+    }
+    
+    // Get location name from coordinates
+    let locationName = '';
+    try {
+      const [longitude, latitude] = coordinates;
+      const addressInfo = await getAddressFromCoordinates(latitude, longitude);
+      locationName = addressInfo.fullAddress;
+    } catch (error) {
+      console.error('Error fetching location name:', error);
+      // Continue with location update even if location name fetch fails
+    }
+    
+    // Update location
+    const customer = await User.findByIdAndUpdate(
+      customerId,
+      {
+        location: {
+          type: 'Point',
+          coordinates,
+          locationName
+        }
+      },
+      { new: true }
+    ).select('-password -refreshToken');
+    
+    if (!customer) {
+      return sendError(res, 404, 'Customer not found');
+    }
+    
+    // Also update in Redis for real-time access
+    await redisClient.set(
+      `customer_location:${customerId}`,
+      JSON.stringify({
+        customerId,
+        coordinates,
+        locationName,
+        updatedAt: new Date()
+      }),
+      'EX',
+      300 // Expire in 5 minutes if not updated
+    );
+    
+    return sendSuccess(res, 200, 'Location updated successfully', { location: customer.location });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Get customer location
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getLocation = async (req, res) => {
+  try {
+    const customerId = req.user._id;
+    
+    // Try to get from Redis first (most up-to-date)
+    const redisLocation = await redisClient.get(`customer_location:${customerId}`);
+    if (redisLocation) {
+      const locationData = JSON.parse(redisLocation);
+      return sendSuccess(res, 200, 'Location retrieved successfully', { location: locationData });
+    }
+    
+    // If not in Redis, get from database
+    const customer = await User.findById(customerId).select('location');
+    
+    if (!customer) {
+      return sendError(res, 404, 'Customer not found');
+    }
+    
+    return sendSuccess(res, 200, 'Location retrieved successfully', { location: customer.location });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
 module.exports = {
   getProfile,
   updateProfile,
@@ -1001,5 +1092,7 @@ module.exports = {
   cancelOrder,
   rateOrder,
   checkout,
-  trackOrder
+  trackOrder,
+  updateLocation,
+  getLocation
 }; 

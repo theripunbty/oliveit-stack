@@ -314,6 +314,7 @@ paths:
   /auth/register/vendor:
     post:
       summary: Register a new vendor
+      description: Vendors must register with a unique username which will be used for login. Email is only used for account recovery.
       tags:
         - Authentication
       requestBody:
@@ -332,10 +333,11 @@ paths:
                 email:
                   type: string
                   format: email
-                  description: Vendor's email address
+                  description: Vendor's email address (for password reset only)
                 username:
                   type: string
-                  description: Unique username for login (4-20 characters)
+                  description: Unique username for login (4-20 characters, required for login)
+                  example: ripunbty
                 password:
                   type: string
                   format: password
@@ -518,6 +520,7 @@ paths:
   /auth/login/vendor:
     post:
       summary: Login as vendor with username and password
+      description: Vendors must login using their unique username (e.g., 'ripunbty') and password. Email is only used for password reset.
       tags:
         - Authentication
       requestBody:
@@ -529,11 +532,13 @@ paths:
               properties:
                 username:
                   type: string
-                  description: Vendor username
+                  description: Vendor username (not email)
+                  example: ripunbty
                 password:
                   type: string
                   format: password
                   description: Vendor password
+                  example: securepassword123
       responses:
         200:
           description: Logged in successfully
@@ -4637,4 +4642,243 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/Error'
+
+  /customer/location:
+    get:
+      summary: Get customer current location
+      tags:
+        - Customer
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Location retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    put:
+      summary: Update customer current location
+      tags:
+        - Customer
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - coordinates
+              properties:
+                coordinates:
+                  type: array
+                  items:
+                    type: number
+                  description: [longitude, latitude]
+      responses:
+        200:
+          description: Location updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        400:
+          description: Invalid coordinates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
                 $ref: '#/components/schemas/Error' 
+
+  /auth/user/location:
+    get:
+      summary: Get user's current location (works for all user types)
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Location retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      location:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                            example: Point
+                          coordinates:
+                            type: array
+                            items:
+                              type: number
+                            example: [77.2090, 28.6139]
+                          locationName:
+                            type: string
+                            example: "123 Main Street, Delhi, India"
+                      role:
+                        type: string
+                        enum: [customer, vendor, delivery, admin]
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error' 
+    
+    put:
+      summary: Update user's current location (works for all user types)
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - coordinates
+              properties:
+                coordinates:
+                  type: array
+                  items:
+                    type: number
+                  description: [longitude, latitude]
+                  example: [77.2090, 28.6139]
+      responses:
+        200:
+          description: Location updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      location:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                            example: Point
+                          coordinates:
+                            type: array
+                            items:
+                              type: number
+                            example: [77.2090, 28.6139]
+                          locationName:
+                            type: string
+                            example: "123 Main Street, Delhi, India"
+                      role:
+                        type: string
+                        enum: [customer, vendor, delivery, admin]
+        400:
+          description: Invalid coordinates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login/vendor:
+    post:
+      summary: Login as vendor with username and password
+      description: Vendors must login using their unique username (e.g., 'ripunbty') and password. Email is only used for password reset.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Vendor username (not email)
+                  example: ripunbty
+                password:
+                  type: string
+                  format: password
+                  description: Vendor password
+                  example: securepassword123
+      responses:
+        200:
+          description: Logged in successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        400:
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
