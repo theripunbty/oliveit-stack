@@ -16,21 +16,21 @@ const USER_STATUS = {
   REJECTED: 'rejected'
 };
 
-// Define vendor category types - fixed syntax to use square brackets
+// Define vendor category types - updated with hyphens instead of underscores
 const VENDOR_CATEGORIES = [
-  "fruits_vegetables",
-  "dairy_eggs",
-  "meat_seafood",
+  "fruits-vegetables",
+  "dairy-eggs",
+  "meat-seafood",
   "bakery",
   "pantry",
   "snacks",
   "beverages",
-  "frozen_foods",
-  "personal_care",
+  "frozen-foods",
+  "personal-care",
   "household",
-  "baby_products",
-  "health_wellness",
-  "ready_to_eat",
+  "baby-products",
+  "health-wellness",
+  "ready-to-eat",
   "other"
 ];
 
