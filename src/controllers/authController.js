@@ -1203,6 +1203,33 @@ const updateUserLocation = async (req, res) => {
   }
 };
 
+/**
+ * Check if username is available
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const checkUsernameAvailability = async (req, res) => {
+  try {
+    const { username } = req.body;
+
+    // Validate username format
+    if (!username || !/^[a-zA-Z0-9_]{4,20}$/.test(username)) {
+      return sendError(res, 400, 'Username must be 4-20 characters (letters, numbers, underscore)');
+    }
+
+    // Check if username already exists
+    const existingUsername = await User.findOne({ username });
+    
+    if (existingUsername) {
+      return sendSuccess(res, 200, 'Username is not available', { available: false });
+    }
+
+    return sendSuccess(res, 200, 'Username is available', { available: true });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
 module.exports = {
   registerCustomer,
   registerVendor,
@@ -1222,5 +1249,6 @@ module.exports = {
   forgotPassword,
   resetPassword,
   getUserLocation,
-  updateUserLocation
+  updateUserLocation,
+  checkUsernameAvailability
 }; 
