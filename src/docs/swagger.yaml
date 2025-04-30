@@ -78,7 +78,11 @@ components:
           type: string
         role:
           type: string
-          enum: [customer, vendor, delivery, admin]
+          enum:
+            - 'customer'
+            - 'vendor'
+            - 'delivery'
+            - 'admin'
         customerId:
           type: string
           description: Unique customer ID (6-8 digits) for customer role
@@ -92,7 +96,10 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, active, rejected]
+          enum:
+            - 'pending'
+            - 'active'
+            - 'rejected'
         profileImage:
           type: string
         walletBalance:
@@ -110,7 +117,10 @@ components:
           type: string
         addressType:
           type: string
-          enum: [HOME, WORK, OTHER]
+          enum:
+            - 'HOME'
+            - 'WORK'
+            - 'OTHER'
         name:
           type: string
         phone:
@@ -215,13 +225,29 @@ components:
           type: number
         paymentMethod:
           type: string
-          enum: [cash_on_delivery, online, wallet]
+          enum:
+            - 'cash_on_delivery'
+            - 'online'
+            - 'wallet'
         paymentStatus:
           type: string
-          enum: [pending, paid, failed, refunded]
+          enum:
+            - 'pending'
+            - 'paid'
+            - 'failed'
+            - 'refunded'
         status:
           type: string
-          enum: [pending, accepted, rejected, preparing, ready_for_pickup, picked_up, in_transit, delivered, cancelled]
+          enum:
+            - 'pending'
+            - 'accepted'
+            - 'rejected'
+            - 'preparing'
+            - 'ready_for_pickup'
+            - 'picked_up'
+            - 'in_transit'
+            - 'delivered'
+            - 'cancelled'
         deliveryAgent:
           type: string
         createdAt:
@@ -333,25 +359,24 @@ paths:
                       description: Complete address of the store
                     storeCategory:
                       type: string
-                      enum: [
-                        fruits,
-                        vegetables,
-                        dairy,
-                        eggs,
-                        meat,
-                        seafood,
-                        bakery,
-                        pantry,
-                        snacks,
-                        beverages,
-                        frozen,
-                        personal,
-                        household,
-                        baby,
-                        health,
-                        ready,
-                        other
-                      ]
+                      enum:
+                        - 'fruits'
+                        - 'vegetables'
+                        - 'dairy'
+                        - 'eggs'
+                        - 'meat'
+                        - 'seafood'
+                        - 'bakery'
+                        - 'pantry'
+                        - 'snacks'
+                        - 'beverages'
+                        - 'frozen'
+                        - 'personal'
+                        - 'household'
+                        - 'baby'
+                        - 'health'
+                        - 'ready'
+                        - 'other'
                       description: Store category
                 legalDocuments:
                   type: object
@@ -585,7 +610,9 @@ paths:
                   description: Registered email address
                 role:
                   type: string
-                  enum: [vendor, admin]
+                  enum:
+                    - 'vendor'
+                    - 'admin'
                   default: vendor
                   description: User role (defaults to vendor)
       responses:
@@ -633,7 +660,9 @@ paths:
                   description: New password (min 8 characters)
                 role:
                   type: string
-                  enum: [vendor, admin]
+                  enum:
+                    - 'vendor'
+                    - 'admin'
                   default: vendor
                   description: User role (defaults to vendor)
       responses:
@@ -784,7 +813,10 @@ paths:
           name: status
           schema:
             type: string
-            enum: [pending, active, rejected]
+            enum:
+              - 'pending'
+              - 'active'
+              - 'rejected'
           description: Filter vendors by status
         - in: query
           name: search
@@ -1237,7 +1269,10 @@ paths:
                         type: number
                 addressType:
                   type: string
-                  enum: [HOME, WORK, OTHER]
+                  enum:
+                    - 'HOME'
+                    - 'WORK'
+                    - 'OTHER'
                 isDefault:
                   type: boolean
       responses:
@@ -1326,7 +1361,10 @@ paths:
                         type: number
                 addressType:
                   type: string
-                  enum: [HOME, WORK, OTHER]
+                  enum:
+                    - 'HOME'
+                    - 'WORK'
+                    - 'OTHER'
                 isDefault:
                   type: boolean
       responses:
@@ -1630,7 +1668,10 @@ paths:
                   description: Delivery address ID
                 paymentMethod:
                   type: string
-                  enum: [cash_on_delivery, online, wallet]
+                  enum:
+                    - 'cash_on_delivery'
+                    - 'online'
+                    - 'wallet'
                 deliveryNote:
                   type: string
                   description: Optional notes for delivery
@@ -1673,7 +1714,16 @@ paths:
           name: status
           schema:
             type: string
-            enum: [pending, accepted, rejected, preparing, ready_for_pickup, picked_up, in_transit, delivered, cancelled]
+            enum:
+              - 'pending'
+              - 'accepted'
+              - 'rejected'
+              - 'preparing'
+              - 'ready_for_pickup'
+              - 'picked_up'
+              - 'in_transit'
+              - 'delivered'
+              - 'cancelled'
           description: Filter orders by status
         - in: query
           name: limit
@@ -2229,7 +2279,16 @@ paths:
           name: status
           schema:
             type: string
-            enum: [pending, accepted, rejected, preparing, ready_for_pickup, picked_up, in_transit, delivered, cancelled]
+            enum:
+              - 'pending'
+              - 'accepted'
+              - 'rejected'
+              - 'preparing'
+              - 'ready_for_pickup'
+              - 'picked_up'
+              - 'in_transit'
+              - 'delivered'
+              - 'cancelled'
           description: Filter orders by status
         - in: query
           name: fromDate
@@ -2328,7 +2387,11 @@ paths:
               properties:
                 status:
                   type: string
-                  enum: [accepted, rejected, preparing, ready_for_pickup]
+                  enum:
+                    - 'accepted'
+                    - 'rejected'
+                    - 'preparing'
+                    - 'ready_for_pickup'
                   description: New status
                 notes:
                   type: string
@@ -2624,7 +2687,10 @@ paths:
           name: status
           schema:
             type: string
-            enum: [picked_up, in_transit, delivered]
+            enum:
+              - 'picked_up'
+              - 'in_transit'
+              - 'delivered'
           description: Filter by job status
         - in: query
           name: date
@@ -2775,7 +2841,10 @@ paths:
               properties:
                 status:
                   type: string
-                  enum: [picked_up, in_transit, delivered]
+                  enum:
+                    - 'picked_up'
+                    - 'in_transit'
+                    - 'delivered'
                   description: New job status
                 notes:
                   type: string
