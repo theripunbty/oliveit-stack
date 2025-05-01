@@ -247,24 +247,35 @@ const registerDeliveryAgent = async (req, res) => {
  */
 const registerAdmin = async (req, res) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
+    const { email, password, firstName, lastName, phone } = req.body;
 
     // Validate required fields
-    if (!email || !password) {
-      return sendError(res, 400, 'Email and password are required');
+    if (!email || !password || !phone) {
+      return sendError(res, 400, 'Email, password, and phone are required');
+    }
+
+    // Validate phone number
+    if (!/^\d{10}$/.test(phone)) {
+      return sendError(res, 400, 'Phone number must be 10 digits');
     }
 
     // Check if admin already exists
-    const existingUser = await User.findOne({ email, role: USER_ROLES.ADMIN });
+    const existingUser = await User.findOne({ 
+      $or: [
+        { email, role: USER_ROLES.ADMIN },
+        { phone, role: USER_ROLES.ADMIN }
+      ]
+    });
     
     if (existingUser) {
-      return sendError(res, 409, 'Admin with this email already exists');
+      return sendError(res, 409, 'Admin with this email or phone already exists');
     }
 
     // Create new admin
     const admin = new User({
       role: USER_ROLES.ADMIN,
       email,
+      phone,
       password, // Will be hashed in the pre-save hook
       firstName,
       lastName,
@@ -277,6 +288,7 @@ const registerAdmin = async (req, res) => {
       admin: {
         _id: admin._id,
         email: admin.email,
+        phone: admin.phone,
         role: admin.role,
         status: admin.status
       }
@@ -588,15 +600,15 @@ const loginWithPassword = async (req, res) => {
  */
 const loginAdmin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, phone } = req.body;
 
-    // Validate required fields
-    if (!email || !password) {
-      return sendError(res, 400, 'Email and password are required');
+    // Validate required fields - either email or phone is required
+    if ((!email && !phone) || !password) {
+      return sendError(res, 400, 'Either email or phone, and password are required');
     }
 
-    // Check against environment variables first for the default admin
-    if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+    // Check against environment variables first for the default admin (email only)
+    if (email && email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
       // Check if default admin exists in DB, if not create one
       let adminUser = await User.findOne({ role: USER_ROLES.ADMIN, email });
       
@@ -605,9 +617,13 @@ const loginAdmin = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
         
+        // Generate a default phone number if not provided
+        const defaultPhone = process.env.ADMIN_PHONE || '0000000000';
+        
         adminUser = await User.create({
           role: USER_ROLES.ADMIN,
           email,
+          phone: defaultPhone,
           password: hashedPassword,
           status: USER_STATUS.ACTIVE,
           firstName: 'Admin',
@@ -627,6 +643,7 @@ const loginAdmin = async (req, res) => {
         user: {
           _id: adminUser._id,
           email: adminUser.email,
+          phone: adminUser.phone,
           role: adminUser.role
         },
         accessToken,
@@ -635,7 +652,14 @@ const loginAdmin = async (req, res) => {
     }
 
     // If not default admin, check DB
-    const adminUser = await User.findOne({ role: USER_ROLES.ADMIN, email });
+    let query = { role: USER_ROLES.ADMIN };
+    if (email) {
+      query.email = email;
+    } else if (phone) {
+      query.phone = phone;
+    }
+    
+    const adminUser = await User.findOne(query);
     
     if (!adminUser) {
       return sendError(res, 404, 'Admin not found');
@@ -660,6 +684,7 @@ const loginAdmin = async (req, res) => {
       user: {
         _id: adminUser._id,
         email: adminUser.email,
+        phone: adminUser.phone,
         role: adminUser.role
       },
       accessToken,
