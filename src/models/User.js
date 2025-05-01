@@ -100,7 +100,8 @@ const userSchema = new mongoose.Schema({
       validator: function(v) {
         // Required for vendors and admins
         if (this.role === USER_ROLES.VENDOR || this.role === USER_ROLES.ADMIN) {
-          return /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,})+$/.test(v);
+          // More permissive email regex that allows various domains
+          return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(v);
         }
         return true;
       },
