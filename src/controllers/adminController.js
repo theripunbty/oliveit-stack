@@ -1485,7 +1485,7 @@ const getAuditLogs = async (req, res) => {
 };
 
 /**
- * Get vendor documents
+ * Get vendor's documents
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
@@ -1493,11 +1493,11 @@ const getVendorDocuments = async (req, res) => {
   try {
     const vendorId = req.params.id;
     
-    // Get vendor details with focus on documents
+    // Find vendor
     const vendor = await User.findOne({
       _id: vendorId,
       role: USER_ROLES.VENDOR
-    }).select('_id fullName vendorId profileImage storeDetails.storePhoto legalDocuments kycDocuments');
+    }).select('legalDocuments registrationDocuments');
     
     if (!vendor) {
       return sendError(res, 404, 'Vendor not found');
@@ -1505,50 +1505,193 @@ const getVendorDocuments = async (req, res) => {
     
     // Create URLs for all vendor documents
     const baseUrl = `${req.protocol}://${req.get('host')}/`;
-    const vendorData = vendor.toObject();
     
-    // Organize all documents in a structured format
-    const documents = {
-      profile: {
-        profileImage: vendorData.profileImage ? {
-          path: vendorData.profileImage,
-          url: baseUrl + vendorData.profileImage
-        } : null
-      },
-      store: {
-        storePhoto: vendorData.storeDetails?.storePhoto ? {
-          path: vendorData.storeDetails.storePhoto,
-          url: baseUrl + vendorData.storeDetails.storePhoto
-        } : null
-      },
-      legal: {
-        aadhaarPhoto: vendorData.legalDocuments?.aadhaarPhoto ? {
-          path: vendorData.legalDocuments.aadhaarPhoto,
-          url: baseUrl + vendorData.legalDocuments.aadhaarPhoto,
-          aadhaarNumber: vendorData.legalDocuments.aadhaarNumber
-        } : null,
-        panPhoto: vendorData.legalDocuments?.panPhoto ? {
-          path: vendorData.legalDocuments.panPhoto,
-          url: baseUrl + vendorData.legalDocuments.panPhoto,
-          panNumber: vendorData.legalDocuments.panNumber
-        } : null
-      },
-      kyc: Array.isArray(vendorData.kycDocuments) ? 
-        vendorData.kycDocuments.map(doc => ({
-          type: doc.type,
-          path: doc.documentUrl,
-          url: doc.documentUrl ? baseUrl + doc.documentUrl : null,
-          status: doc.verificationStatus
-        })) : []
+    const vendorData = vendor.toObject();
+    const documents = [];
+    
+    // Helper function to ensure complete URL
+    const ensureCompleteUrl = (url) => {
+      if (!url) return null;
+      // If it's already a full URL (Cloudinary URLs start with http or https)
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      }
+      // For local paths, add the base URL
+      return baseUrl + url;
     };
     
-    return sendSuccess(res, 200, 'Vendor documents retrieved successfully', {
-      vendor: {
-        _id: vendorData._id,
-        fullName: vendorData.fullName,
-        vendorId: vendorData.vendorId
-      },
-      documents
+    // Process legal documents
+    if (vendorData.legalDocuments) {
+      if (vendorData.legalDocuments.aadhaarPhoto) {
+        documents.push({
+          type: 'Aadhaar Card',
+          number: vendorData.legalDocuments.aadhaarNumber,
+          url: ensureCompleteUrl(vendorData.legalDocuments.aadhaarPhoto)
+        });
+      }
+      
+      if (vendorData.legalDocuments.panPhoto) {
+        documents.push({
+          type: 'PAN Card',
+          number: vendorData.legalDocuments.panNumber,
+          url: ensureCompleteUrl(vendorData.legalDocuments.panPhoto)
+        });
+      }
+      
+      if (vendorData.legalDocuments.gstinNumber) {
+        documents.push({
+          type: 'GSTIN',
+          number: vendorData.legalDocuments.gstinNumber,
+          url: null // No photo for GSTIN in the schema
+        });
+      }
+      
+      if (vendorData.legalDocuments.fssaiNumber) {
+        documents.push({
+          type: 'FSSAI License',
+          number: vendorData.legalDocuments.fssaiNumber,
+          url: null // No photo for FSSAI in the schema
+        });
+      }
+    }
+    
+    // Process registration documents
+    if (vendorData.registrationDocuments && vendorData.registrationDocuments.length > 0) {
+      vendorData.registrationDocuments.forEach((doc, index) => {
+        if (doc.documentUrl) {
+          documents.push({
+            type: `Registration Document ${index + 1}`,
+            number: null,
+            url: ensureCompleteUrl(doc.documentUrl),
+            uploadedAt: doc.uploadedAt,
+            status: doc.status
+          });
+        }
+      });
+    }
+    
+    return sendSuccess(res, 200, 'Vendor documents retrieved successfully', { documents });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Get list of vendors with pending registration
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getPendingVendorRegistrations = async (req, res) => {
+  try {
+    const { limit = 20, page = 1, sort = 'createdAt', order = 'desc' } = req.query;
+    
+    // Build query for pending vendors
+    const query = {
+      role: USER_ROLES.VENDOR,
+      status: USER_STATUS.PENDING
+    };
+    
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Build sort object
+    const sortObj = {};
+    sortObj[sort] = order === 'desc' ? -1 : 1;
+    
+    // Get pending vendors
+    const pendingVendors = await User.find(query)
+      .select('_id fullName email phone username vendorId storeDetails.storeName storeDetails.storeCategory createdAt')
+      .sort(sortObj)
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    // Get total count for pagination
+    const totalPendingVendors = await User.countDocuments(query);
+    
+    return sendSuccess(res, 200, 'Pending vendor registrations retrieved successfully', {
+      pendingVendors,
+      pagination: {
+        totalPendingVendors,
+        totalPages: Math.ceil(totalPendingVendors / limit),
+        currentPage: parseInt(page),
+        limit: parseInt(limit)
+      }
+    });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Get vendor registration details
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getVendorRegistrationDetails = async (req, res) => {
+  try {
+    const vendorId = req.params.id;
+    
+    // Get vendor registration details
+    const vendor = await User.findOne({
+      _id: vendorId,
+      role: USER_ROLES.VENDOR
+    }).select('-password -refreshToken');
+    
+    if (!vendor) {
+      return sendError(res, 404, 'Vendor not found');
+    }
+    
+    const vendorData = vendor.toObject();
+    
+    // Handle Cloudinary URLs
+    // Check if the URL is already a full URL (Cloudinary) or needs the base URL added
+    const baseUrl = `${req.protocol}://${req.get('host')}/`;
+    
+    const ensureCompleteUrl = (url) => {
+      if (!url) return null;
+      // If it's already a full URL (Cloudinary URLs start with http or https)
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      }
+      // For local paths, add the base URL
+      return baseUrl + url;
+    };
+    
+    // Add URLs for profile image
+    if (vendorData.profileImage) {
+      vendorData.profileImageUrl = ensureCompleteUrl(vendorData.profileImage);
+    }
+    
+    // Add URLs for store photo
+    if (vendorData.storeDetails && vendorData.storeDetails.storePhoto) {
+      vendorData.storeDetails.storePhotoUrl = ensureCompleteUrl(vendorData.storeDetails.storePhoto);
+    }
+    
+    // Add URLs for legal documents
+    if (vendorData.legalDocuments) {
+      if (vendorData.legalDocuments.aadhaarPhoto) {
+        vendorData.legalDocuments.aadhaarPhotoUrl = ensureCompleteUrl(vendorData.legalDocuments.aadhaarPhoto);
+      }
+      if (vendorData.legalDocuments.panPhoto) {
+        vendorData.legalDocuments.panPhotoUrl = ensureCompleteUrl(vendorData.legalDocuments.panPhoto);
+      }
+    }
+    
+    // Add URLs for registration documents
+    if (vendorData.registrationDocuments && vendorData.registrationDocuments.length > 0) {
+      vendorData.registrationDocuments = vendorData.registrationDocuments.map(doc => {
+        if (doc.documentUrl) {
+          return {
+            ...doc,
+            documentFullUrl: ensureCompleteUrl(doc.documentUrl)
+          };
+        }
+        return doc;
+      });
+    }
+    
+    return sendSuccess(res, 200, 'Vendor registration details retrieved successfully', {
+      vendor: vendorData
     });
   } catch (error) {
     return handleApiError(res, error);
@@ -1586,5 +1729,7 @@ module.exports = {
   deleteBanner,
   getSystemSettings,
   updateSystemSettings,
-  getAuditLogs
+  getAuditLogs,
+  getPendingVendorRegistrations,
+  getVendorRegistrationDetails
 }; 

@@ -4,6 +4,7 @@ const authController = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 const { authLimiter, otpLimiter } = require('../middleware/rateLimiter');
 const { profileUpload, storeUpload, kycUpload } = require('../middleware/multerConfig');
+const { registrationUpload } = require('../middleware/cloudinaryConfig');
 
 // Customer registration and login
 router.post('/register/customer', otpLimiter, authController.registerCustomer);
@@ -14,9 +15,12 @@ const vendorUploadFields = [
   { name: 'profileImage', maxCount: 1 },
   { name: 'storePhoto', maxCount: 1 },
   { name: 'aadhaarPhoto', maxCount: 1 },
-  { name: 'panPhoto', maxCount: 1 }
+  { name: 'panPhoto', maxCount: 1 },
+  { name: 'registrationDoc1', maxCount: 1 },
+  { name: 'registrationDoc2', maxCount: 1 },
+  { name: 'registrationDoc3', maxCount: 1 }
 ];
-router.post('/register/vendor', authLimiter, profileUpload.fields(vendorUploadFields), authController.registerVendor);
+router.post('/register/vendor', authLimiter, registrationUpload.fields(vendorUploadFields), authController.registerVendor);
 router.post('/login/vendor', authLimiter, authController.loginVendor);
 router.post('/forgot-password', authLimiter, authController.forgotPassword);
 router.post('/reset-password', authLimiter, authController.resetPassword);

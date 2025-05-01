@@ -15,6 +15,8 @@ router.get('/vendors', adminController.getVendors);
 router.get('/vendors/find/:vendorId', adminController.findVendorByFormattedId);
 router.get('/vendors/:id', adminController.getVendorDetails);
 router.get('/vendors/:id/documents', adminController.getVendorDocuments);
+router.get('/vendors/registrations/pending', adminController.getPendingVendorRegistrations);
+router.get('/vendors/registrations/:id', adminController.getVendorRegistrationDetails);
 router.put('/vendors/:id/approve', adminController.approveVendor);
 router.put('/vendors/:id/reject', adminController.rejectVendor);
 

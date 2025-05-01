@@ -55,44 +55,40 @@ const registerCustomer = async (req, res) => {
  */
 const registerVendor = async (req, res) => {
   try {
-    const { 
+    const {
       fullName,
-      phone, 
+      phone,
       email,
       username,
       password,
-      location,
       storeDetails,
+      location,
       legalDocuments,
       bankDetails,
       upiDetails
     } = req.body;
 
     // Validate required fields
-    if (!fullName || !phone || !email || !username || !password) {
-      return sendError(res, 400, 'All required fields must be provided');
+    if (!fullName || !phone || !email || !username || !password || !location) {
+      return sendError(res, 400, 'Required fields are missing');
     }
 
-    if (!location || !location.coordinates || location.coordinates.length !== 2) {
+    // Check that location is valid
+    if (!location.coordinates || location.coordinates.length !== 2) {
       return sendError(res, 400, 'Valid location coordinates are required');
     }
 
-    // Check if username already exists
-    const existingUsername = await User.findOne({ username });
-    if (existingUsername) {
-      return sendError(res, 409, 'Username already exists');
-    }
+    // Check if vendor already exists
+    const existingUser = await User.findOne({
+      $or: [
+        { email, role: USER_ROLES.VENDOR },
+        { phone, role: USER_ROLES.VENDOR },
+        { username, role: USER_ROLES.VENDOR }
+      ]
+    });
 
-    // Check if email already exists for vendors
-    const existingEmail = await User.findOne({ email, role: USER_ROLES.VENDOR });
-    if (existingEmail) {
-      return sendError(res, 409, 'Vendor with this email already exists');
-    }
-
-    // Check if phone already exists for vendors
-    const existingPhone = await User.findOne({ phone, role: USER_ROLES.VENDOR });
-    if (existingPhone) {
-      return sendError(res, 409, 'Vendor with this phone number already exists');
+    if (existingUser) {
+      return sendError(res, 409, 'Vendor with this email, phone, or username already exists');
     }
 
     // Get location name from coordinates
@@ -106,11 +102,41 @@ const registerVendor = async (req, res) => {
       // Continue with registration even if location name fetch fails
     }
 
-    // Process file paths from request
+    // Process Cloudinary file paths from request
+    // Cloudinary stores full URLs in the path property
     const profileImage = req.files && req.files.profileImage ? req.files.profileImage[0].path : null;
     const storePhoto = req.files && req.files.storePhoto ? req.files.storePhoto[0].path : null;
     const aadhaarPhoto = req.files && req.files.aadhaarPhoto ? req.files.aadhaarPhoto[0].path : null;
     const panPhoto = req.files && req.files.panPhoto ? req.files.panPhoto[0].path : null;
+    
+    // Process additional registration documents
+    const registrationDoc1 = req.files && req.files.registrationDoc1 ? req.files.registrationDoc1[0].path : null;
+    const registrationDoc2 = req.files && req.files.registrationDoc2 ? req.files.registrationDoc2[0].path : null;
+    const registrationDoc3 = req.files && req.files.registrationDoc3 ? req.files.registrationDoc3[0].path : null;
+    
+    // Prepare registration documents array
+    const registrationDocuments = [];
+    if (registrationDoc1) {
+      registrationDocuments.push({
+        documentType: 'registration',
+        documentUrl: registrationDoc1,
+        uploadedAt: new Date()
+      });
+    }
+    if (registrationDoc2) {
+      registrationDocuments.push({
+        documentType: 'registration',
+        documentUrl: registrationDoc2,
+        uploadedAt: new Date()
+      });
+    }
+    if (registrationDoc3) {
+      registrationDocuments.push({
+        documentType: 'registration',
+        documentUrl: registrationDoc3,
+        uploadedAt: new Date()
+      });
+    }
 
     // Create new vendor
     const vendor = new User({
@@ -150,6 +176,7 @@ const registerVendor = async (req, res) => {
         upiId: upiDetails?.upiId,
         preferredApp: upiDetails?.preferredApp
       },
+      registrationDocuments,
       status: USER_STATUS.PENDING // Vendors require admin approval
     });
 

@@ -205,8 +205,8 @@ const userSchema = new mongoose.Schema({
       type: String,
       validate: {
         validator: function(v) {
-          if (!v) return true;
-          return /^\d{12}$/.test(v);
+          // Optional, but if provided, must be 12 digits
+          return !v || /^\d{12}$/.test(v);
         },
         message: 'Aadhaar number must be 12 digits'
       }
@@ -218,10 +218,10 @@ const userSchema = new mongoose.Schema({
       type: String,
       validate: {
         validator: function(v) {
-          if (!v) return true;
-          return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v);
+          // Optional, but if provided, must be in PAN format
+          return !v || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v);
         },
-        message: 'PAN number must be in valid format (e.g. ABCDE1234F)'
+        message: 'PAN must be in format AAAAA1111A'
       }
     },
     panPhoto: {
@@ -231,8 +231,8 @@ const userSchema = new mongoose.Schema({
       type: String,
       validate: {
         validator: function(v) {
-          if (!v) return true;
-          return /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/.test(v);
+          // Optional, but if provided, must be in GSTIN format
+          return !v || /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/.test(v);
         },
         message: 'GSTIN must be in valid format'
       }
@@ -241,6 +241,31 @@ const userSchema = new mongoose.Schema({
       type: String
     }
   },
+  // Additional registration documents
+  registrationDocuments: [
+    {
+      documentType: {
+        type: String,
+        required: true
+      },
+      documentUrl: {
+        type: String,
+        required: true
+      },
+      uploadedAt: {
+        type: Date,
+        default: Date.now
+      },
+      verifiedAt: {
+        type: Date
+      },
+      status: {
+        type: String,
+        enum: ['pending', 'verified', 'rejected'],
+        default: 'pending'
+      }
+    }
+  ],
   // Bank details
   bankDetails: {
     accountNumber: {

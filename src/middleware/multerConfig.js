@@ -9,9 +9,10 @@ const PRODUCT_DIR = `${UPLOAD_DIR}/products`;
 const KYC_DIR = `${UPLOAD_DIR}/kyc`;
 const CATEGORY_DIR = `${UPLOAD_DIR}/categories`;
 const STORE_DIR = `${UPLOAD_DIR}/stores`;
+const REGISTRATION_DIR = `${UPLOAD_DIR}/registration`;
 
 // Create directories if they don't exist
-[UPLOAD_DIR, PROFILE_DIR, PRODUCT_DIR, KYC_DIR, CATEGORY_DIR, STORE_DIR].forEach(dir => {
+[UPLOAD_DIR, PROFILE_DIR, PRODUCT_DIR, KYC_DIR, CATEGORY_DIR, STORE_DIR, REGISTRATION_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -33,6 +34,8 @@ const storage = multer.diskStorage({
       uploadPath = CATEGORY_DIR;
     } else if (file.fieldname.includes('store')) {
       uploadPath = STORE_DIR;
+    } else if (file.fieldname.includes('registration')) {
+      uploadPath = REGISTRATION_DIR;
     }
     
     cb(null, uploadPath);
@@ -96,16 +99,24 @@ const storeUpload = multer({
   limits: { fileSize: 2 * 1024 * 1024 } // 2MB
 });
 
+const registrationUpload = multer({
+  storage,
+  fileFilter: documentFilter,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+
 module.exports = {
   profileUpload,
   productUpload,
   kycUpload,
   categoryUpload,
   storeUpload,
+  registrationUpload,
   UPLOAD_DIR,
   PROFILE_DIR,
   PRODUCT_DIR,
   KYC_DIR,
   CATEGORY_DIR,
-  STORE_DIR
+  STORE_DIR,
+  REGISTRATION_DIR
 }; 
