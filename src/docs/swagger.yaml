@@ -1119,6 +1119,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /admin/vendors/find/{vendorId}:
+    get:
+      summary: Find vendor by formatted vendorId
+      tags:
+        - Admin - Vendors
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: vendorId
+          required: true
+          schema:
+            type: string
+            pattern: '^VEN\d{6,8}$'
+          description: Formatted Vendor ID (e.g. VEN123456)
+      responses:
+        200:
+          description: Vendor found successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        400:
+          description: Invalid vendor ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Vendor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /admin/customers:
     get:
       summary: Get all customers

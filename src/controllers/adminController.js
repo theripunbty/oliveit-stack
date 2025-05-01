@@ -159,6 +159,50 @@ const getVendorDetails = async (req, res) => {
 };
 
 /**
+ * Find vendor by formatted vendorId
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const findVendorByFormattedId = async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+    
+    // Validate the format of vendorId
+    if (!vendorId.match(/^VEN\d{6,8}$/)) {
+      return sendError(res, 400, 'Invalid vendor ID format. Must be VEN followed by 6-8 digits');
+    }
+    
+    // Find vendor by vendorId field
+    const vendor = await User.findOne({
+      vendorId: vendorId,
+      role: USER_ROLES.VENDOR
+    }).select('-password -refreshToken');
+    
+    if (!vendor) {
+      return sendError(res, 404, 'Vendor not found');
+    }
+    
+    // Create URLs for profile image
+    const baseUrl = `${req.protocol}://${req.get('host')}/`;
+    const vendorData = vendor.toObject();
+    
+    // Add URL for profile image
+    if (vendorData.profileImage) {
+      vendorData.profileImageUrl = baseUrl + vendorData.profileImage;
+    }
+    
+    // Add URL for store photo
+    if (vendorData.storeDetails && vendorData.storeDetails.storePhoto) {
+      vendorData.storeDetails.storePhotoUrl = baseUrl + vendorData.storeDetails.storePhoto;
+    }
+    
+    return sendSuccess(res, 200, 'Vendor found successfully', { vendor: vendorData });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
  * Approve a vendor
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -1514,8 +1558,10 @@ const getVendorDocuments = async (req, res) => {
 module.exports = {
   getVendors,
   getVendorDetails,
+  getVendorDocuments,
   approveVendor,
   rejectVendor,
+  findVendorByFormattedId,
   getDeliveryAgents,
   getDeliveryAgentDetails,
   approveDeliveryAgent,
@@ -1540,6 +1586,5 @@ module.exports = {
   deleteBanner,
   getSystemSettings,
   updateSystemSettings,
-  getAuditLogs,
-  getVendorDocuments
+  getAuditLogs
 }; 

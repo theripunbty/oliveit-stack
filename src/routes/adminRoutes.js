@@ -12,6 +12,7 @@ router.use(logAdminAction);
 
 // Vendor management routes
 router.get('/vendors', adminController.getVendors);
+router.get('/vendors/find/:vendorId', adminController.findVendorByFormattedId);
 router.get('/vendors/:id', adminController.getVendorDetails);
 router.get('/vendors/:id/documents', adminController.getVendorDocuments);
 router.put('/vendors/:id/approve', adminController.approveVendor);
