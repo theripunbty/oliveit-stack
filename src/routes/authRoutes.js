@@ -27,7 +27,7 @@ router.post('/login/delivery', otpLimiter, authController.loginWithOTP);
 
 // Admin registration and login
 router.post('/register/admin', authLimiter, authController.registerAdmin);
-router.post('/login/admin', authLimiter, authController.loginAdmin);
+router.post('/login/admin', authController.loginAdmin);
 
 // OTP verification
 router.post('/verify-otp', otpLimiter, authController.verifyOTPAndLogin);
