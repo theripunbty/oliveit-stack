@@ -260,7 +260,7 @@ const rejectVendor = async (req, res) => {
       return sendError(res, 404, 'Pending vendor not found');
     }
     
-    // Update vendor status
+    // First update vendor status to rejected
     vendor.status = USER_STATUS.REJECTED;
     vendor.rejectionReason = reason;
     await vendor.save();
@@ -268,7 +268,7 @@ const rejectVendor = async (req, res) => {
     // Send notification (placeholder for actual implementation)
     console.log(`Vendor ${vendorId} rejected. Send notification to ${vendor.email}`);
     
-    // Log admin action
+    // Log admin action for rejection
     await new AdminAuditLog({
       adminId: req.user._id,
       action: 'VENDOR_REJECTED',
@@ -278,7 +278,42 @@ const rejectVendor = async (req, res) => {
       }
     }).save();
     
-    return sendSuccess(res, 200, 'Vendor rejected successfully', { vendor });
+    // Automatically delete the vendor account
+    console.log(`Automatically deleting rejected vendor account for ID: ${vendor._id}`);
+    
+    // Check if vendor has associated products
+    const productsCount = await Product.countDocuments({ vendor: vendor._id });
+    if (productsCount > 0) {
+      console.log(`Warning: Rejected vendor has ${productsCount} associated products that will be orphaned.`);
+      // Consider adding logic to handle products if needed
+    }
+    
+    // Check if vendor has associated orders
+    const ordersCount = await Order.countDocuments({ vendor: vendor._id });
+    if (ordersCount > 0) {
+      console.log(`Warning: Rejected vendor has ${ordersCount} associated orders that will be orphaned.`);
+      // Consider adding logic to handle orders if needed
+    }
+    
+    // Delete the vendor account
+    const deleteResult = await User.findByIdAndDelete(vendor._id);
+    
+    // Log admin action for deletion
+    await new AdminAuditLog({
+      adminId: req.user._id,
+      action: 'DELETE',
+      entity: 'VENDOR',
+      entityId: vendor._id.toString(),
+      details: {
+        vendorId: vendor._id,
+        vendorEmail: vendor.email,
+        vendorName: `${vendor.firstName} ${vendor.lastName}`,
+        reason: 'Auto-deleted after rejection',
+        deleteUserAccount: true
+      }
+    }).save();
+    
+    return sendSuccess(res, 200, 'Vendor rejected and account deleted successfully');
   } catch (error) {
     return handleApiError(res, error);
   }
