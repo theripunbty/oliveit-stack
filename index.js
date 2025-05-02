@@ -17,6 +17,7 @@ const adminRoutes = require('./src/routes/adminRoutes');
 const customerRoutes = require('./src/routes/customerRoutes');
 const vendorRoutes = require('./src/routes/vendorRoutes');
 const deliveryRoutes = require('./src/routes/deliveryRoutes');
+const supportRoutes = require('./src/routes/supportRoutes');
 
 // Load Swagger documentation
 const swaggerDocument = YAML.load(path.join(__dirname, './src/docs/swagger.yaml'));
@@ -54,6 +55,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/vendor', vendorRoutes);
 app.use('/api/delivery', deliveryRoutes);
+app.use('/api/support', supportRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -79,6 +81,26 @@ io.on('connection', (socket) => {
     // Broadcast to all clients tracking this order
     io.to(`order-${orderId}`).emit('delivery-location-updated', location);
     console.log(`Location updated for order ${orderId}:`, location);
+  });
+  
+  // Join support chat room
+  socket.on('join-support-chat', (chatId) => {
+    socket.join(`chat-${chatId}`);
+    console.log(`Client joined support chat: ${chatId}`);
+  });
+  
+  // Send support message
+  socket.on('send-support-message', (data) => {
+    const { chatId, message } = data;
+    // Broadcast message to all clients in this chat room
+    io.to(`chat-${chatId}`).emit('support-message-received', message);
+    console.log(`Message sent in chat ${chatId}:`, message);
+  });
+  
+  // Support agent typing indicator
+  socket.on('support-typing', (data) => {
+    const { chatId, isTyping, user } = data;
+    socket.to(`chat-${chatId}`).emit('support-typing-status', { isTyping, user });
   });
   
   // Disconnect event
