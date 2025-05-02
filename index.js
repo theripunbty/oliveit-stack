@@ -184,14 +184,14 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-// server.listen(PORT, () => {
-//   console.log(`Server running on port ${PORT}`);
-//   console.log(`API Documentation available at http://localhost:${PORT}/api-docs`);
-// }); 
-server.listen(PORT, '192.168.29.211', () => {
-  console.log(`Server running on http://192.168.29.211:${PORT}`);
-  console.log(`API Documentation available at http://192.168.29.211:${PORT}/api-docs`);
-});
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`API Documentation available at http://localhost:${PORT}/api-docs`);
+}); 
+// server.listen(PORT, '192.168.29.211', () => {
+//   console.log(`Server running on http://192.168.29.211:${PORT}`);
+//   console.log(`API Documentation available at http://192.168.29.211:${PORT}/api-docs`);
+// });
  
 
 
