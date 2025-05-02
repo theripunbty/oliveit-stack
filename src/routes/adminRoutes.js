@@ -11,7 +11,7 @@ router.use(isAdmin);
 router.use(logAdminAction);
 
 // Special case for DELETE vendor route - handle this first
-router.delete('/vendors/:id([0-9a-fA-F]{24})', adminController.deleteVendor);
+router.delete('/vendors/:id', adminController.deleteVendor);
 
 // Vendor management routes
 router.get('/vendors', adminController.getVendors);

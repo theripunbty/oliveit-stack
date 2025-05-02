@@ -295,11 +295,27 @@ const deleteVendor = async (req, res) => {
     const { deleteUser = false } = req.body; // Get deleteUser flag from request body
     console.log(`deleteVendor called with ID: ${vendorId}, deleteUser: ${deleteUser}`);
     
-    // Find vendor
-    const vendor = await User.findOne({
-      _id: vendorId,
-      role: USER_ROLES.VENDOR
-    });
+    // Check if the ID is a valid MongoDB ObjectId
+    const isValidObjectId = mongoose.Types.ObjectId.isValid(vendorId);
+    console.log(`Is valid ObjectId: ${isValidObjectId}`);
+    
+    let vendor;
+    
+    // Find vendor by either MongoDB ID or vendorId
+    if (isValidObjectId) {
+      vendor = await User.findOne({
+        _id: vendorId,
+        role: USER_ROLES.VENDOR
+      });
+    } else if (vendorId.startsWith('VEN')) {
+      // Try to find by formatted vendorId
+      vendor = await User.findOne({
+        vendorId: vendorId,
+        role: USER_ROLES.VENDOR
+      });
+    } else {
+      return sendError(res, 400, 'Invalid vendor ID format');
+    }
     
     if (!vendor) {
       console.log(`Vendor not found with ID: ${vendorId}`);
@@ -309,7 +325,7 @@ const deleteVendor = async (req, res) => {
     console.log(`Found vendor: ${vendor.firstName} ${vendor.lastName}, Email: ${vendor.email}`);
     
     // Check if vendor has associated products
-    const productsCount = await Product.countDocuments({ vendor: vendorId });
+    const productsCount = await Product.countDocuments({ vendor: vendor._id });
     console.log(`Vendor has ${productsCount} associated products`);
     
     if (productsCount > 0) {
@@ -317,7 +333,7 @@ const deleteVendor = async (req, res) => {
     }
     
     // Check if vendor has associated orders
-    const ordersCount = await Order.countDocuments({ vendor: vendorId });
+    const ordersCount = await Order.countDocuments({ vendor: vendor._id });
     console.log(`Vendor has ${ordersCount} associated orders`);
     
     if (ordersCount > 0) {
@@ -327,12 +343,12 @@ const deleteVendor = async (req, res) => {
     let result;
     if (deleteUser) {
       // Delete both vendor and user account
-      console.log(`Deleting vendor and user account for ID: ${vendorId}`);
-      result = await User.findByIdAndDelete(vendorId);
+      console.log(`Deleting vendor and user account for ID: ${vendor._id}`);
+      result = await User.findByIdAndDelete(vendor._id);
       console.log(`Vendor and user delete result:`, result);
     } else {
       // Keep the user account but convert to customer role
-      console.log(`Converting vendor to customer for ID: ${vendorId}`);
+      console.log(`Converting vendor to customer for ID: ${vendor._id}`);
       vendor.role = USER_ROLES.CUSTOMER;
       vendor.status = USER_STATUS.ACTIVE;
       vendor.vendorId = undefined; // Remove vendor ID
