@@ -12,7 +12,8 @@ router.put('/chat/:chatId/read', supportController.markMessagesAsRead);
 // Admin-only routes
 router.get('/chats', protect, restrictTo('admin'), supportController.getAllChats);
 router.put('/chat/:chatId', protect, restrictTo('admin'), supportController.updateChat);
-router.put('/chat/:chatId/read', supportController.markMessagesAsRead);
+router.delete('/chat/inactive', protect, restrictTo('admin'), supportController.deleteInactiveChats);
+router.delete('/chats/inactive', protect, restrictTo('admin'), supportController.deleteInactiveChats);
 router.delete('/chat/:chatId', protect, restrictTo('admin'), supportController.deleteChat);
 
 module.exports = router; 

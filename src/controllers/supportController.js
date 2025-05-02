@@ -247,7 +247,36 @@ const updateChat = async (req, res) => {
 };
 
 /**
- * Delete a chat
+ * Delete inactive chats
+ * @route DELETE /api/support/chat/inactive
+ * @access Private (admin only)
+ */
+const deleteInactiveChats = async (req, res) => {
+  try {
+    // Calculate the time 30 minutes ago
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    
+    // Find chats that haven't been updated in the last 30 minutes
+    const result = await SupportChat.deleteMany({
+      lastMessageTime: { $lt: thirtyMinutesAgo },
+      status: { $ne: 'resolved' } // Don't delete resolved chats automatically
+    });
+    
+    console.log(`Deleted ${result.deletedCount} inactive chats`);
+    
+    return res.status(200).json({ 
+      success: true, 
+      message: `Deleted ${result.deletedCount} inactive chats`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Error deleting inactive chats:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Delete a specific chat
  * @route DELETE /api/support/chat/:chatId
  * @access Private (admin only)
  */
@@ -255,22 +284,15 @@ const deleteChat = async (req, res) => {
   try {
     const { chatId } = req.params;
     
-    const chat = await SupportChat.findOne({ chatId });
+    const result = await SupportChat.deleteOne({ chatId });
     
-    if (!chat) {
+    if (result.deletedCount === 0) {
       return res.status(404).json({ message: 'Chat not found' });
     }
     
-    // Delete the chat
-    await SupportChat.deleteOne({ chatId });
-    
-    // Notify connected clients that the chat has been deleted
-    const io = req.app.get('socketio');
-    io.to(`chat-${chatId}`).emit('support-chat-deleted', { chatId });
-    
     return res.status(200).json({ 
       success: true, 
-      message: 'Chat deleted successfully' 
+      message: 'Chat deleted successfully'
     });
   } catch (error) {
     console.error('Error deleting chat:', error);
@@ -285,5 +307,6 @@ module.exports = {
   markMessagesAsRead,
   getAllChats,
   updateChat,
+  deleteInactiveChats,
   deleteChat
 }; 

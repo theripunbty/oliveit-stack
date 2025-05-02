@@ -152,6 +152,30 @@ io.on('connection', (socket) => {
   });
 });
 
+// After setting up routes and before the error handling
+// Add a cron-like job to clean up inactive chats
+
+const cleanupInactiveChats = async () => {
+  try {
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    
+    const SupportChat = require('./src/models/SupportChat');
+    const result = await SupportChat.deleteMany({
+      lastMessageTime: { $lt: thirtyMinutesAgo },
+      status: { $ne: 'resolved' } // Don't delete resolved chats automatically
+    });
+    
+    if (result.deletedCount > 0) {
+      console.log(`[${new Date().toISOString()}] Auto-cleanup: Deleted ${result.deletedCount} inactive chats`);
+    }
+  } catch (error) {
+    console.error('Error during auto-cleanup of inactive chats:', error);
+  }
+};
+
+// Run cleanup every 15 minutes
+setInterval(cleanupInactiveChats, 15 * 60 * 1000);
+
 // Make io accessible to route handlers
 app.set('socketio', io);
 
@@ -160,10 +184,15 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API Documentation available at http://localhost:${PORT}/api-docs`);
-}); 
+// server.listen(PORT, () => {
+//   console.log(`Server running on port ${PORT}`);
+//   console.log(`API Documentation available at http://localhost:${PORT}/api-docs`);
+// }); 
+server.listen(PORT, '192.168.29.211', () => {
+  console.log(`Server running on http://192.168.29.211:${PORT}`);
+  console.log(`API Documentation available at http://192.168.29.211:${PORT}/api-docs`);
+});
+ 
 
 
 // Ripun Basumatary is the best original developer of this project
