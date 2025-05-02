@@ -10,6 +10,7 @@ const YAML = require('yamljs');
 const path = require('path');
 const connectDB = require('./src/config/database');
 const { errorHandler, notFound } = require('./src/middleware/errorHandler');
+const { verifyAccessToken } = require('./src/utils/jwtUtils');
 
 // Import routes
 const authRoutes = require('./src/routes/authRoutes');
@@ -69,6 +70,36 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
   
+  // Socket authentication
+  socket.on('authenticate', async (data) => {
+    try {
+      const { token } = data;
+      if (!token) {
+        console.log('Socket authentication failed: No token provided');
+        return;
+      }
+      
+      // Verify token
+      const decoded = verifyAccessToken(token);
+      if (!decoded || !decoded.userId) {
+        console.log('Socket authentication failed: Invalid token');
+        return;
+      }
+      
+      // Store user info on socket for later use
+      socket.user = {
+        id: decoded.userId,
+        role: decoded.role
+      };
+      
+      console.log(`Socket authenticated: ${socket.id} as ${decoded.role} (${decoded.userId})`);
+      socket.emit('authenticated', { success: true });
+    } catch (error) {
+      console.error('Socket authentication error:', error);
+      socket.emit('authenticated', { success: false, error: 'Authentication failed' });
+    }
+  });
+  
   // Join a room for order tracking
   socket.on('join-order-tracking', (orderId) => {
     socket.join(`order-${orderId}`);
@@ -86,15 +117,27 @@ io.on('connection', (socket) => {
   // Join support chat room
   socket.on('join-support-chat', (chatId) => {
     socket.join(`chat-${chatId}`);
-    console.log(`Client joined support chat: ${chatId}`);
+    if (socket.user) {
+      console.log(`Client joined support chat: ${chatId} (User: ${socket.user.id}, Role: ${socket.user.role})`);
+    } else {
+      console.log(`Client joined support chat: ${chatId} (Unauthenticated)`);
+    }
   });
   
   // Send support message
   socket.on('send-support-message', (data) => {
     const { chatId, message } = data;
+    
+    // Add authenticated user info if available
+    if (socket.user && message) {
+      message.senderId = message.senderId || socket.user.id;
+      message.senderType = message.senderType || (socket.user.role === 'admin' ? 'admin' : 'user');
+      console.log(`Authenticated message in chat ${chatId} from ${socket.user.role} (${socket.user.id})`);
+    }
+    
     // Broadcast message to all clients in this chat room
     io.to(`chat-${chatId}`).emit('support-message-received', message);
-    console.log(`Message sent in chat ${chatId}:`, message);
+    console.log(`Message sent in chat ${chatId}:`, message?.content || 'No content');
   });
   
   // Support agent typing indicator
