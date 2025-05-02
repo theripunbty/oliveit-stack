@@ -1047,6 +1047,8 @@ paths:
                 reason:
                   type: string
                   description: Reason for rejection
+              required:
+                - reason
       responses:
         200:
           description: Vendor rejected successfully
