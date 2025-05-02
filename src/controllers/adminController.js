@@ -292,7 +292,8 @@ const rejectVendor = async (req, res) => {
 const deleteVendor = async (req, res) => {
   try {
     const vendorId = req.params.id;
-    console.log(`deleteVendor called with ID: ${vendorId}`);
+    const { deleteUser = false } = req.body; // Get deleteUser flag from request body
+    console.log(`deleteVendor called with ID: ${vendorId}, deleteUser: ${deleteUser}`);
     
     // Find vendor
     const vendor = await User.findOne({
@@ -323,22 +324,49 @@ const deleteVendor = async (req, res) => {
       return sendError(res, 400, 'Cannot delete vendor with associated orders. Please consider deactivating the vendor instead.');
     }
     
-    // Delete vendor
-    const deleteResult = await User.findByIdAndDelete(vendorId);
-    console.log(`Vendor delete result:`, deleteResult);
+    let result;
+    if (deleteUser) {
+      // Delete both vendor and user account
+      console.log(`Deleting vendor and user account for ID: ${vendorId}`);
+      result = await User.findByIdAndDelete(vendorId);
+      console.log(`Vendor and user delete result:`, result);
+    } else {
+      // Keep the user account but convert to customer role
+      console.log(`Converting vendor to customer for ID: ${vendorId}`);
+      vendor.role = USER_ROLES.CUSTOMER;
+      vendor.status = USER_STATUS.ACTIVE;
+      vendor.vendorId = undefined; // Remove vendor ID
+      
+      // Remove vendor-specific fields
+      vendor.storeDetails = undefined;
+      vendor.bankDetails = undefined;
+      vendor.upiDetails = undefined;
+      vendor.kycDocuments = [];
+      
+      // Save the updated user
+      result = await vendor.save();
+      console.log(`Vendor converted to customer:`, result);
+    }
     
     // Log admin action
     await new AdminAuditLog({
       adminId: req.user._id,
-      action: 'VENDOR_DELETED',
+      action: 'DELETE',
+      entity: 'VENDOR',
+      entityId: vendor._id.toString(),
       details: {
         vendorId: vendor._id,
         vendorEmail: vendor.email,
-        vendorName: `${vendor.firstName} ${vendor.lastName}`
+        vendorName: `${vendor.firstName} ${vendor.lastName}`,
+        deleteUserAccount: deleteUser
       }
     }).save();
     
-    return sendSuccess(res, 200, 'Vendor deleted successfully');
+    const message = deleteUser 
+      ? 'Vendor and user account deleted successfully' 
+      : 'Vendor deleted and converted to customer successfully';
+    
+    return sendSuccess(res, 200, message);
   } catch (error) {
     console.error('Error in deleteVendor:', error);
     return handleApiError(res, error);
@@ -1769,6 +1797,51 @@ const getVendorRegistrationDetails = async (req, res) => {
   }
 };
 
+// System restart controller
+const restartSystem = async (req, res) => {
+  try {
+    // Only allow admins to restart the system
+    if (req.user.role !== USER_ROLES.ADMIN) {
+      return sendError(res, 403, 'You do not have permission to restart the system');
+    }
+
+    console.log('Restarting oliveit-stack service...');
+    
+    // Use child_process to execute PM2 restart command
+    const { exec } = require('child_process');
+    
+    exec('pm2 restart oliveit-stack', (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error executing PM2 restart: ${error.message}`);
+        return sendError(res, 500, `Failed to restart system: ${error.message}`);
+      }
+      
+      if (stderr) {
+        console.error(`PM2 command stderr: ${stderr}`);
+      }
+      
+      console.log(`PM2 command stdout: ${stdout}`);
+      
+      // Log admin action
+      new AdminAuditLog({
+        adminId: req.user._id,
+        action: 'OTHER',
+        entity: 'SETTINGS',
+        details: {
+          action: 'SYSTEM_RESTART',
+          initiatedBy: `${req.user.firstName} ${req.user.lastName}`,
+          timestamp: new Date()
+        }
+      }).save().catch(err => console.error('Error logging restart action:', err));
+      
+      return sendSuccess(res, 200, 'System restart initiated successfully');
+    });
+  } catch (error) {
+    console.error('Error in system restart:', error);
+    return handleApiError(res, error);
+  }
+};
+
 module.exports = {
   getVendors,
   getVendorDetails,
@@ -1803,5 +1876,6 @@ module.exports = {
   getAuditLogs,
   getPendingVendorRegistrations,
   getVendorRegistrationDetails,
-  deleteVendor
+  deleteVendor,
+  restartSystem
 }; 

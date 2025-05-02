@@ -59,6 +59,9 @@ router.delete('/banners/:id', adminController.deleteBanner);
 router.get('/settings', adminController.getSystemSettings);
 router.put('/settings', adminController.updateSystemSettings);
 
+// System Restart Route
+router.post('/system/restart', adminController.restartSystem);
+
 // Audit Logs Route
 router.get('/audit-logs', adminController.getAuditLogs);
 
