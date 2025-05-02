@@ -246,11 +246,44 @@ const updateChat = async (req, res) => {
   }
 };
 
+/**
+ * Delete a chat
+ * @route DELETE /api/support/chat/:chatId
+ * @access Private (admin only)
+ */
+const deleteChat = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    
+    const chat = await SupportChat.findOne({ chatId });
+    
+    if (!chat) {
+      return res.status(404).json({ message: 'Chat not found' });
+    }
+    
+    // Delete the chat
+    await SupportChat.deleteOne({ chatId });
+    
+    // Notify connected clients that the chat has been deleted
+    const io = req.app.get('socketio');
+    io.to(`chat-${chatId}`).emit('support-chat-deleted', { chatId });
+    
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Chat deleted successfully' 
+    });
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   initializeChat,
   getChatById,
   addMessage,
   markMessagesAsRead,
   getAllChats,
-  updateChat
+  updateChat,
+  deleteChat
 }; 
