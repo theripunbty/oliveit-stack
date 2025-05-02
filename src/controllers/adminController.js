@@ -268,7 +268,70 @@ const rejectVendor = async (req, res) => {
     // Send notification (placeholder for actual implementation)
     console.log(`Vendor ${vendorId} rejected. Send notification to ${vendor.email}`);
     
+    // Log admin action
+    await new AdminAuditLog({
+      adminId: req.user._id,
+      action: 'VENDOR_REJECTED',
+      details: {
+        vendorId: vendor._id,
+        reason: reason
+      }
+    }).save();
+    
     return sendSuccess(res, 200, 'Vendor rejected successfully', { vendor });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Delete a vendor permanently
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const deleteVendor = async (req, res) => {
+  try {
+    const vendorId = req.params.id;
+    
+    // Find vendor
+    const vendor = await User.findOne({
+      _id: vendorId,
+      role: USER_ROLES.VENDOR
+    });
+    
+    if (!vendor) {
+      return sendError(res, 404, 'Vendor not found');
+    }
+    
+    // Check if vendor has associated products
+    const productsCount = await Product.countDocuments({ vendor: vendorId });
+    
+    if (productsCount > 0) {
+      return sendError(res, 400, 'Cannot delete vendor with associated products. Please delete or reassign the products first.');
+    }
+    
+    // Check if vendor has associated orders
+    const ordersCount = await Order.countDocuments({ vendor: vendorId });
+    
+    if (ordersCount > 0) {
+      return sendError(res, 400, 'Cannot delete vendor with associated orders. Please consider deactivating the vendor instead.');
+    }
+    
+    // Delete vendor
+    await User.findByIdAndDelete(vendorId);
+    
+    // Log admin action
+    await new AdminAuditLog({
+      adminId: req.user._id,
+      action: 'VENDOR_DELETED',
+      details: {
+        vendorId: vendor._id,
+        vendorEmail: vendor.email,
+        vendorName: `${vendor.firstName} ${vendor.lastName}`
+      }
+    }).save();
+    
+    return sendSuccess(res, 200, 'Vendor deleted successfully');
   } catch (error) {
     return handleApiError(res, error);
   }
@@ -1731,5 +1794,6 @@ module.exports = {
   updateSystemSettings,
   getAuditLogs,
   getPendingVendorRegistrations,
-  getVendorRegistrationDetails
+  getVendorRegistrationDetails,
+  deleteVendor
 }; 

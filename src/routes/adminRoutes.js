@@ -19,6 +19,7 @@ router.get('/vendors/registrations/pending', adminController.getPendingVendorReg
 router.get('/vendors/registrations/:id', adminController.getVendorRegistrationDetails);
 router.put('/vendors/:id/approve', adminController.approveVendor);
 router.put('/vendors/:id/reject', adminController.rejectVendor);
+router.delete('/vendors/:id', adminController.deleteVendor);
 
 // Delivery agent management routes
 router.get('/delivery-agents', adminController.getDeliveryAgents);
