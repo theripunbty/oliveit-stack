@@ -271,7 +271,8 @@ const rejectVendor = async (req, res) => {
     // Create an audit log for the rejection and deletion
     await new AdminAuditLog({
       adminId: req.user._id,
-      action: 'VENDOR_REJECTED_DELETED',
+      action: 'REJECT',
+      entity: 'VENDOR',
       details: {
         vendorId: vendorId,
         vendorEmail: vendorEmail,
