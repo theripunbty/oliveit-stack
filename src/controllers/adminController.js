@@ -292,6 +292,7 @@ const rejectVendor = async (req, res) => {
 const deleteVendor = async (req, res) => {
   try {
     const vendorId = req.params.id;
+    console.log(`deleteVendor called with ID: ${vendorId}`);
     
     // Find vendor
     const vendor = await User.findOne({
@@ -300,11 +301,15 @@ const deleteVendor = async (req, res) => {
     });
     
     if (!vendor) {
+      console.log(`Vendor not found with ID: ${vendorId}`);
       return sendError(res, 404, 'Vendor not found');
     }
     
+    console.log(`Found vendor: ${vendor.firstName} ${vendor.lastName}, Email: ${vendor.email}`);
+    
     // Check if vendor has associated products
     const productsCount = await Product.countDocuments({ vendor: vendorId });
+    console.log(`Vendor has ${productsCount} associated products`);
     
     if (productsCount > 0) {
       return sendError(res, 400, 'Cannot delete vendor with associated products. Please delete or reassign the products first.');
@@ -312,13 +317,15 @@ const deleteVendor = async (req, res) => {
     
     // Check if vendor has associated orders
     const ordersCount = await Order.countDocuments({ vendor: vendorId });
+    console.log(`Vendor has ${ordersCount} associated orders`);
     
     if (ordersCount > 0) {
       return sendError(res, 400, 'Cannot delete vendor with associated orders. Please consider deactivating the vendor instead.');
     }
     
     // Delete vendor
-    await User.findByIdAndDelete(vendorId);
+    const deleteResult = await User.findByIdAndDelete(vendorId);
+    console.log(`Vendor delete result:`, deleteResult);
     
     // Log admin action
     await new AdminAuditLog({
@@ -333,6 +340,7 @@ const deleteVendor = async (req, res) => {
     
     return sendSuccess(res, 200, 'Vendor deleted successfully');
   } catch (error) {
+    console.error('Error in deleteVendor:', error);
     return handleApiError(res, error);
   }
 };
