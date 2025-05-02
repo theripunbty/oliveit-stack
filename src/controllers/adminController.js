@@ -260,166 +260,64 @@ const rejectVendor = async (req, res) => {
       return sendError(res, 404, 'Pending vendor not found');
     }
     
-    // First update vendor status to rejected
-    vendor.status = USER_STATUS.REJECTED;
-    vendor.rejectionReason = reason;
-    await vendor.save();
+    // Store vendor email for notification before deleting
+    const vendorEmail = vendor.email;
+    const vendorPhone = vendor.phone;
+    const vendorName = `${vendor.firstName} ${vendor.lastName}`;
+    
+    // Log the rejection before deleting
+    console.log(`Vendor ${vendorId} rejected. Reason: ${reason}. Will be deleted from the system.`);
+    
+    // Create an audit log for the rejection and deletion
+    await new AdminAuditLog({
+      adminId: req.user._id,
+      action: 'VENDOR_REJECTED_DELETED',
+      details: {
+        vendorId: vendorId,
+        vendorEmail: vendorEmail,
+        vendorPhone: vendorPhone,
+        vendorName: vendorName,
+        rejectionReason: reason
+      }
+    }).save();
+    
+    // Handle any pending orders from this vendor by cancelling them
+    const pendingOrders = await Order.updateMany(
+      { 
+        vendor: vendorId, 
+        status: { $in: [ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING] }
+      },
+      { 
+        $set: { 
+          status: ORDER_STATUS.CANCELLED,
+          cancellationReason: `Vendor account was rejected by admin. Reason: ${reason}`
+        },
+        $push: { 
+          statusHistory: {
+            status: ORDER_STATUS.CANCELLED,
+            timestamp: Date.now(),
+            updatedBy: req.user._id,
+            notes: `Order cancelled due to vendor account rejection. Reason: ${reason}`
+          }
+        }
+      }
+    );
+    
+    // Delete all products associated with this vendor
+    const deletedProducts = await Product.deleteMany({ vendor: vendorId });
+    
+    // Delete the vendor completely from the system
+    await User.deleteOne({ _id: vendorId });
     
     // Send notification (placeholder for actual implementation)
-    console.log(`Vendor ${vendorId} rejected. Send notification to ${vendor.email}`);
+    console.log(`Notification sent to ${vendorEmail} about rejection and account deletion`);
     
-    // Log admin action for rejection
-    await new AdminAuditLog({
-      adminId: req.user._id,
-      action: 'VENDOR_REJECTED',
-      details: {
-        vendorId: vendor._id,
-        reason: reason
-      }
-    }).save();
-    
-    // Automatically delete the vendor account
-    console.log(`Automatically deleting rejected vendor account for ID: ${vendor._id}`);
-    
-    // Check if vendor has associated products
-    const productsCount = await Product.countDocuments({ vendor: vendor._id });
-    if (productsCount > 0) {
-      console.log(`Warning: Rejected vendor has ${productsCount} associated products that will be orphaned.`);
-      // Consider adding logic to handle products if needed
-    }
-    
-    // Check if vendor has associated orders
-    const ordersCount = await Order.countDocuments({ vendor: vendor._id });
-    if (ordersCount > 0) {
-      console.log(`Warning: Rejected vendor has ${ordersCount} associated orders that will be orphaned.`);
-      // Consider adding logic to handle orders if needed
-    }
-    
-    // Delete the vendor account
-    const deleteResult = await User.findByIdAndDelete(vendor._id);
-    
-    // Log admin action for deletion
-    await new AdminAuditLog({
-      adminId: req.user._id,
-      action: 'DELETE',
-      entity: 'VENDOR',
-      entityId: vendor._id.toString(),
-      details: {
-        vendorId: vendor._id,
-        vendorEmail: vendor.email,
-        vendorName: `${vendor.firstName} ${vendor.lastName}`,
-        reason: 'Auto-deleted after rejection',
-        deleteUserAccount: true
-      }
-    }).save();
-    
-    return sendSuccess(res, 200, 'Vendor rejected and account deleted successfully');
+    return sendSuccess(res, 200, 'Vendor rejected and deleted from the system', { 
+      message: 'Vendor account has been completely removed from the system',
+      productsRemoved: deletedProducts.deletedCount,
+      ordersCancelled: pendingOrders.modifiedCount
+    });
   } catch (error) {
-    return handleApiError(res, error);
-  }
-};
-
-/**
- * Delete a vendor permanently
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
-const deleteVendor = async (req, res) => {
-  try {
-    const vendorId = req.params.id;
-    const { deleteUser = false } = req.body; // Get deleteUser flag from request body
-    console.log(`deleteVendor called with ID: ${vendorId}, deleteUser: ${deleteUser}`);
-    
-    // Check if the ID is a valid MongoDB ObjectId
-    const isValidObjectId = mongoose.Types.ObjectId.isValid(vendorId);
-    console.log(`Is valid ObjectId: ${isValidObjectId}`);
-    
-    let vendor;
-    
-    // Find vendor by either MongoDB ID or vendorId
-    if (isValidObjectId) {
-      vendor = await User.findOne({
-        _id: vendorId,
-        role: USER_ROLES.VENDOR
-      });
-    } else if (vendorId.startsWith('VEN')) {
-      // Try to find by formatted vendorId
-      vendor = await User.findOne({
-        vendorId: vendorId,
-        role: USER_ROLES.VENDOR
-      });
-    } else {
-      return sendError(res, 400, 'Invalid vendor ID format');
-    }
-    
-    if (!vendor) {
-      console.log(`Vendor not found with ID: ${vendorId}`);
-      return sendError(res, 404, 'Vendor not found');
-    }
-    
-    console.log(`Found vendor: ${vendor.firstName} ${vendor.lastName}, Email: ${vendor.email}`);
-    
-    // Check if vendor has associated products
-    const productsCount = await Product.countDocuments({ vendor: vendor._id });
-    console.log(`Vendor has ${productsCount} associated products`);
-    
-    if (productsCount > 0) {
-      return sendError(res, 400, 'Cannot delete vendor with associated products. Please delete or reassign the products first.');
-    }
-    
-    // Check if vendor has associated orders
-    const ordersCount = await Order.countDocuments({ vendor: vendor._id });
-    console.log(`Vendor has ${ordersCount} associated orders`);
-    
-    if (ordersCount > 0) {
-      return sendError(res, 400, 'Cannot delete vendor with associated orders. Please consider deactivating the vendor instead.');
-    }
-    
-    let result;
-    if (deleteUser) {
-      // Delete both vendor and user account
-      console.log(`Deleting vendor and user account for ID: ${vendor._id}`);
-      result = await User.findByIdAndDelete(vendor._id);
-      console.log(`Vendor and user delete result:`, result);
-    } else {
-      // Keep the user account but convert to customer role
-      console.log(`Converting vendor to customer for ID: ${vendor._id}`);
-      vendor.role = USER_ROLES.CUSTOMER;
-      vendor.status = USER_STATUS.ACTIVE;
-      vendor.vendorId = undefined; // Remove vendor ID
-      
-      // Remove vendor-specific fields
-      vendor.storeDetails = undefined;
-      vendor.bankDetails = undefined;
-      vendor.upiDetails = undefined;
-      vendor.kycDocuments = [];
-      
-      // Save the updated user
-      result = await vendor.save();
-      console.log(`Vendor converted to customer:`, result);
-    }
-    
-    // Log admin action
-    await new AdminAuditLog({
-      adminId: req.user._id,
-      action: 'DELETE',
-      entity: 'VENDOR',
-      entityId: vendor._id.toString(),
-      details: {
-        vendorId: vendor._id,
-        vendorEmail: vendor.email,
-        vendorName: `${vendor.firstName} ${vendor.lastName}`,
-        deleteUserAccount: deleteUser
-      }
-    }).save();
-    
-    const message = deleteUser 
-      ? 'Vendor and user account deleted successfully' 
-      : 'Vendor deleted and converted to customer successfully';
-    
-    return sendSuccess(res, 200, message);
-  } catch (error) {
-    console.error('Error in deleteVendor:', error);
     return handleApiError(res, error);
   }
 };
@@ -1848,51 +1746,6 @@ const getVendorRegistrationDetails = async (req, res) => {
   }
 };
 
-// System restart controller
-const restartSystem = async (req, res) => {
-  try {
-    // Only allow admins to restart the system
-    if (req.user.role !== USER_ROLES.ADMIN) {
-      return sendError(res, 403, 'You do not have permission to restart the system');
-    }
-
-    console.log('Restarting oliveit-stack service...');
-    
-    // Use child_process to execute PM2 restart command
-    const { exec } = require('child_process');
-    
-    exec('pm2 restart oliveit-stack', (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error executing PM2 restart: ${error.message}`);
-        return sendError(res, 500, `Failed to restart system: ${error.message}`);
-      }
-      
-      if (stderr) {
-        console.error(`PM2 command stderr: ${stderr}`);
-      }
-      
-      console.log(`PM2 command stdout: ${stdout}`);
-      
-      // Log admin action
-      new AdminAuditLog({
-        adminId: req.user._id,
-        action: 'OTHER',
-        entity: 'SETTINGS',
-        details: {
-          action: 'SYSTEM_RESTART',
-          initiatedBy: `${req.user.firstName} ${req.user.lastName}`,
-          timestamp: new Date()
-        }
-      }).save().catch(err => console.error('Error logging restart action:', err));
-      
-      return sendSuccess(res, 200, 'System restart initiated successfully');
-    });
-  } catch (error) {
-    console.error('Error in system restart:', error);
-    return handleApiError(res, error);
-  }
-};
-
 module.exports = {
   getVendors,
   getVendorDetails,
@@ -1926,7 +1779,5 @@ module.exports = {
   updateSystemSettings,
   getAuditLogs,
   getPendingVendorRegistrations,
-  getVendorRegistrationDetails,
-  deleteVendor,
-  restartSystem
+  getVendorRegistrationDetails
 }; 

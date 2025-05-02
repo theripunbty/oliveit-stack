@@ -10,16 +10,13 @@ router.use(authenticate);
 router.use(isAdmin);
 router.use(logAdminAction);
 
-// Special case for DELETE vendor route - handle this first
-router.delete('/vendors/:id', adminController.deleteVendor);
-
 // Vendor management routes
 router.get('/vendors', adminController.getVendors);
-router.get('/vendors/registrations/pending', adminController.getPendingVendorRegistrations);
 router.get('/vendors/find/:vendorId', adminController.findVendorByFormattedId);
-router.get('/vendors/registrations/:id', adminController.getVendorRegistrationDetails);
 router.get('/vendors/:id', adminController.getVendorDetails);
 router.get('/vendors/:id/documents', adminController.getVendorDocuments);
+router.get('/vendors/registrations/pending', adminController.getPendingVendorRegistrations);
+router.get('/vendors/registrations/:id', adminController.getVendorRegistrationDetails);
 router.put('/vendors/:id/approve', adminController.approveVendor);
 router.put('/vendors/:id/reject', adminController.rejectVendor);
 
@@ -58,9 +55,6 @@ router.delete('/banners/:id', adminController.deleteBanner);
 // System Settings Routes
 router.get('/settings', adminController.getSystemSettings);
 router.put('/settings', adminController.updateSystemSettings);
-
-// System Restart Route
-router.post('/system/restart', adminController.restartSystem);
 
 // Audit Logs Route
 router.get('/audit-logs', adminController.getAuditLogs);

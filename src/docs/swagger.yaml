@@ -1025,7 +1025,7 @@ paths:
 
   /admin/vendors/{id}/reject:
     put:
-      summary: Reject a vendor and automatically delete their account
+      summary: Reject a vendor
       tags:
         - Admin - Vendors
       security:
@@ -1049,7 +1049,7 @@ paths:
                   description: Reason for rejection
       responses:
         200:
-          description: Vendor rejected and account deleted successfully
+          description: Vendor rejected successfully
           content:
             application/json:
               schema:
