@@ -1,4 +1,4 @@
-const { User } = require('../models/User');
+const { User, USER_ROLES, USER_STATUS } = require('../models/User');
 const Address = require('../models/Address');
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
@@ -6,6 +6,7 @@ const { Order, ORDER_STATUS, PAYMENT_STATUS, PAYMENT_METHOD } = require('../mode
 const { sendSuccess, sendError, handleApiError } = require('../utils/responseUtils');
 const { getAddressFromCoordinates, calculateDistance } = require('../utils/locationUtils');
 const redisClient = require('../config/redis');
+const mongoose = require('mongoose');
 
 /**
  * Get customer profile
@@ -1073,6 +1074,109 @@ const getLocation = async (req, res) => {
   }
 };
 
+/**
+ * Get nearby stores based on customer location
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getNearbyStores = async (req, res) => {
+  try {
+    const customerId = req.user._id;
+    const { maxDistance = 10, pinCode } = req.query; // Default to 10km if not specified
+    
+    // Get customer location
+    let customerCoords;
+    
+    // First check if customer provided location in query
+    if (req.query.lat && req.query.lng) {
+      customerCoords = [parseFloat(req.query.lng), parseFloat(req.query.lat)];
+    } else {
+      // Try to get from Redis first (most up-to-date)
+      const redisKey = `customer_location:${customerId}`;
+      const redisLocation = await redisClient.get(redisKey);
+      
+      if (redisLocation) {
+        const locationData = JSON.parse(redisLocation);
+        customerCoords = locationData.coordinates;
+      } else {
+        // If not in Redis, get from database
+        const customer = await User.findById(customerId).select('location');
+        
+        if (!customer || !customer.location || !customer.location.coordinates) {
+          return sendError(res, 400, 'Customer location not available. Please update your location or provide lat/lng in the request.');
+        }
+        
+        customerCoords = customer.location.coordinates;
+      }
+    }
+    
+    // Validate coordinates
+    if (!customerCoords || customerCoords.length !== 2) {
+      return sendError(res, 400, 'Invalid customer coordinates');
+    }
+    
+    // Find vendors based on pinCode if provided
+    let query = {
+      role: USER_ROLES.VENDOR,
+      status: USER_STATUS.ACTIVE
+    };
+    
+    if (pinCode) {
+      query['storeDetails.pinCode'] = pinCode;
+    }
+    
+    // Find active vendors
+    const vendors = await User.find(query)
+      .select('fullName storeDetails location walletBalance')
+      .lean();
+    
+    // Filter vendors based on delivery radius
+    const nearbyStores = vendors.filter(vendor => {
+      // Skip vendors without location or coordinates
+      if (!vendor.location || !vendor.location.coordinates || 
+          !vendor.location.coordinates[0] || !vendor.location.coordinates[1]) {
+        return false;
+      }
+      
+      // Calculate distance between customer and vendor
+      const vendorCoords = vendor.location.coordinates;
+      const distance = calculateDistance(
+        customerCoords[1], // latitude
+        customerCoords[0], // longitude
+        vendorCoords[1],   // latitude
+        vendorCoords[0]    // longitude
+      );
+      
+      // Add distance to vendor object for frontend
+      vendor.distance = distance.toFixed(2);
+      
+      // Get vendor's delivery radius (default to 5km if not set)
+      const vendorDeliveryRadius = 
+        (vendor.storeDetails && vendor.storeDetails.deliveryRadiusKm) 
+          ? vendor.storeDetails.deliveryRadiusKm 
+          : 5;
+      
+      // Check if customer is within vendor's delivery radius
+      vendor.isDeliveryAvailable = distance <= vendorDeliveryRadius;
+      
+      // Return vendors that are within the requested max distance
+      // We still return vendors outside their delivery radius, but mark them as unavailable
+      return distance <= parseFloat(maxDistance);
+    });
+    
+    // Sort by distance
+    nearbyStores.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+    
+    return sendSuccess(res, 200, 'Nearby stores retrieved successfully', { 
+      stores: nearbyStores,
+      totalStores: nearbyStores.length,
+      availableForDelivery: nearbyStores.filter(store => store.isDeliveryAvailable).length
+    });
+  } catch (error) {
+    return handleApiError(res, error);
+  }
+};
+
 module.exports = {
   getProfile,
   updateProfile,
@@ -1094,5 +1198,6 @@ module.exports = {
   checkout,
   trackOrder,
   updateLocation,
-  getLocation
+  getLocation,
+  getNearbyStores
 }; 

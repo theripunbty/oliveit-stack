@@ -398,6 +398,17 @@ paths:
                         - 'Society'
                         - 'Other'
                       description: Type of business entity
+                    deliveryRadiusKm:
+                      type: number
+                      description: Maximum delivery radius in kilometers
+                      default: 5
+                      minimum: 1
+                      maximum: 50
+                      example: 5
+                    pinCode:
+                      type: string
+                      description: PIN code/Postal code of the store location
+                      example: "400001"
                 legalDocuments:
                   type: object
                   properties:
@@ -2158,6 +2169,17 @@ paths:
                         - 'Society'
                         - 'Other'
                       description: Type of business entity
+                    deliveryRadiusKm:
+                      type: number
+                      description: Maximum delivery radius in kilometers
+                      default: 5
+                      minimum: 1
+                      maximum: 50
+                      example: 5
+                    pinCode:
+                      type: string
+                      description: PIN code/Postal code of the store location
+                      example: "400001"
                 location:
                   type: object
                   properties:
@@ -2235,3 +2257,124 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /customer/location:
+    get:
+      summary: Get customer location
+      tags:
+        - Customer
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Location retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+
+  /customer/nearby-stores:
+    get:
+      summary: Get nearby stores based on customer location
+      description: |
+        Find vendors/stores that are available for delivery to the customer's location.
+        The API takes into account each vendor's configured delivery radius.
+        Vendors outside their delivery radius will be marked as unavailable for delivery.
+      tags:
+        - Customer
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: maxDistance
+          in: query
+          description: Maximum distance in kilometers to search for stores (default is 10km)
+          required: false
+          schema:
+            type: number
+            default: 10
+        - name: pinCode
+          in: query
+          description: Filter stores by PIN code/Postal code
+          required: false
+          schema:
+            type: string
+        - name: lat
+          in: query
+          description: Customer latitude (optional, will use stored location if not provided)
+          required: false
+          schema:
+            type: number
+        - name: lng
+          in: query
+          description: Customer longitude (optional, will use stored location if not provided)
+          required: false
+          schema:
+            type: number
+      responses:
+        200:
+          description: Nearby stores retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      stores:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                            fullName:
+                              type: string
+                            storeDetails:
+                              type: object
+                              properties:
+                                storeName:
+                                  type: string
+                                storeCategory:
+                                  type: string
+                                storePhoto:
+                                  type: string
+                                deliveryRadiusKm:
+                                  type: number
+                                  example: 5
+                            location:
+                              type: object
+                              properties:
+                                coordinates:
+                                  type: array
+                                  items:
+                                    type: number
+                                locationName:
+                                  type: string
+                            distance:
+                              type: string
+                              description: Distance in kilometers from customer
+                              example: "3.45"
+                            isDeliveryAvailable:
+                              type: boolean
+                              description: Whether this store delivers to customer location
+                      totalStores:
+                        type: number
+                        description: Total number of stores found within maxDistance
+                      availableForDelivery:
+                        type: number
+                        description: Number of stores that deliver to the customer location
+        400:
+          description: Customer location not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          $ref: '#/components/responses/Unauthorized'

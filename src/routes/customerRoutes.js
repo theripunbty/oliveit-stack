@@ -37,6 +37,9 @@ router.get('/orders/:id/track', customerController.trackOrder);
 router.put('/location', customerController.updateLocation);
 router.get('/location', customerController.getLocation);
 
+// Nearby stores
+router.get('/nearby-stores', customerController.getNearbyStores);
+
 // Order tracking (Socket.IO connection will be handled separately)
 
 module.exports = router; 

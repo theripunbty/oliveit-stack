@@ -197,6 +197,17 @@ const userSchema = new mongoose.Schema({
     businessEntityType: {
       type: String,
       enum: BUSINESS_ENTITIES
+    },
+    deliveryRadiusKm: {
+      type: Number,
+      default: 5,
+      min: 1,
+      max: 50,
+      description: 'Delivery radius in kilometers'
+    },
+    pinCode: {
+      type: String,
+      trim: true
     }
   },
   // Vendor legal documents

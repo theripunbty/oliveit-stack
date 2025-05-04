@@ -60,6 +60,12 @@ const updateProfile = async (req, res) => {
       if (storeDetails.storeAddress) updateData.storeDetails.storeAddress = storeDetails.storeAddress;
       if (storeDetails.storeCategory) updateData.storeDetails.storeCategory = storeDetails.storeCategory;
       if (storeDetails.businessEntityType) updateData.storeDetails.businessEntityType = storeDetails.businessEntityType;
+      if (storeDetails.deliveryRadiusKm !== undefined) {
+        // Ensure delivery radius is within allowed range (1-50km)
+        const radius = Math.min(Math.max(1, storeDetails.deliveryRadiusKm), 50);
+        updateData.storeDetails.deliveryRadiusKm = radius;
+      }
+      if (storeDetails.pinCode) updateData.storeDetails.pinCode = storeDetails.pinCode;
     }
     
     // Handle location update
