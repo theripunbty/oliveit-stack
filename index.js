@@ -94,15 +94,6 @@ io.on('connection', (socket) => {
       
       console.log(`Socket authenticated: ${socket.id} as ${decoded.role} (${decoded.userId})`);
       socket.emit('authenticated', { success: true });
-      
-      // Automatically join role-specific channels
-      if (decoded.role === 'customer') {
-        socket.join(`customer-${decoded.userId}`);
-      } else if (decoded.role === 'delivery') {
-        socket.join(`delivery-${decoded.userId}`);
-      } else if (decoded.role === 'vendor') {
-        socket.join(`vendor-${decoded.userId}`);
-      }
     } catch (error) {
       console.error('Socket authentication error:', error);
       socket.emit('authenticated', { success: false, error: 'Authentication failed' });
@@ -113,100 +104,14 @@ io.on('connection', (socket) => {
   socket.on('join-order-tracking', (orderId) => {
     socket.join(`order-${orderId}`);
     console.log(`Client joined tracking for order: ${orderId}`);
-    
-    // Emit current status to the newly joined client
-    try {
-      const redisClient = require('./src/config/redis');
-      redisClient.get(`order_delivery_location:${orderId}`, (err, location) => {
-        if (!err && location) {
-          socket.emit('delivery-location-updated', {
-            orderId,
-            location: JSON.parse(location)
-          });
-        }
-      });
-    } catch (error) {
-      console.error('Error retrieving cached location:', error);
-    }
   });
   
   // Update delivery location
   socket.on('update-delivery-location', (data) => {
-    try {
-      const { orderId, location } = data;
-      
-      if (!socket.user || socket.user.role !== 'delivery') {
-        console.log('Unauthorized location update attempt');
-        socket.emit('error', { message: 'Unauthorized' });
-        return;
-      }
-      
-      if (!orderId || !location || !location.coordinates) {
-        console.log('Invalid location data received');
-        socket.emit('error', { message: 'Invalid location data' });
-        return;
-      }
-      
-      // Save to Redis for persistence between connections
-      const redisClient = require('./src/config/redis');
-      const locationData = {
-        ...location,
-        agentId: socket.user.id,
-        updatedAt: new Date().toISOString()
-      };
-      
-      redisClient.set(
-        `order_delivery_location:${orderId}`,
-        JSON.stringify(locationData),
-        'EX',
-        300 // Expire in 5 minutes
-      );
-      
-      // Broadcast to all clients tracking this order
-      io.to(`order-${orderId}`).emit('delivery-location-updated', {
-        orderId,
-        location: locationData
-      });
-      
-      console.log(`Location updated for order ${orderId}:`, locationData.coordinates);
-    } catch (error) {
-      console.error('Error in socket delivery location update:', error);
-    }
-  });
-  
-  // Delivery status updates
-  socket.on('delivery-status-update', (data) => {
-    try {
-      const { orderId, status, estimatedArrival, message } = data;
-      
-      if (!socket.user || socket.user.role !== 'delivery') {
-        console.log('Unauthorized status update attempt');
-        socket.emit('error', { message: 'Unauthorized' });
-        return;
-      }
-      
-      if (!orderId || !status) {
-        console.log('Invalid status data received');
-        socket.emit('error', { message: 'Invalid status data' });
-        return;
-      }
-      
-      const statusData = {
-        orderId,
-        status,
-        agentId: socket.user.id,
-        timestamp: new Date().toISOString(),
-        estimatedArrival,
-        message
-      };
-      
-      // Broadcast status update to all clients tracking this order
-      io.to(`order-${orderId}`).emit('delivery-status-changed', statusData);
-      
-      console.log(`Status updated for order ${orderId}:`, status);
-    } catch (error) {
-      console.error('Error in socket delivery status update:', error);
-    }
+    const { orderId, location } = data;
+    // Broadcast to all clients tracking this order
+    io.to(`order-${orderId}`).emit('delivery-location-updated', location);
+    console.log(`Location updated for order ${orderId}:`, location);
   });
   
   // Join support chat room

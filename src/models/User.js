@@ -317,15 +317,6 @@ const userSchema = new mongoose.Schema({
       default: 'PENDING'
     }
   }],
-  // Fields for delivery agent status tracking
-  isOnline: {
-    type: Boolean,
-    default: false
-  },
-  lastOnlineAt: {
-    type: Date
-  },
-  // Location tracking
   location: {
     type: {
       type: String,
@@ -342,19 +333,7 @@ const userSchema = new mongoose.Schema({
         return (this.role === USER_ROLES.CUSTOMER || this.role === USER_ROLES.ADMIN) ? [0, 0] : undefined;
       }
     },
-    accuracy: {
-      type: Number
-    },
-    heading: {
-      type: Number
-    },
-    speed: {
-      type: Number
-    },
-    locationName: String,
-    lastLocationUpdateTime: {
-      type: Date
-    }
+    locationName: String
   },
   walletBalance: {
     type: Number,
@@ -364,23 +343,6 @@ const userSchema = new mongoose.Schema({
     type: String
   },
   deviceTokens: [String],
-  // Delivery agent specific fields
-  deliveryPreferences: {
-    maxDistance: {
-      type: Number,
-      default: 10 // Default max distance in km
-    },
-    vehicleType: {
-      type: String,
-      enum: ['bike', 'scooter', 'car', 'auto', 'bicycle', 'walking'],
-      default: 'bike'
-    },
-    orderPreferences: {
-      maxWeight: Number,
-      maxItems: Number,
-      avoidLiquids: Boolean
-    }
-  },
   createdAt: {
     type: Date,
     default: Date.now
