@@ -10,7 +10,9 @@ const ORDER_STATUS = {
   PICKED_UP: 'picked_up',
   IN_TRANSIT: 'in_transit',
   DELIVERED: 'delivered',
-  CANCELLED: 'cancelled'
+  CANCELLED: 'cancelled',
+  CONFIRMED: 'confirmed',
+  DELIVERY_FAILED: 'delivery_failed'
 };
 
 // Define payment status constants
@@ -185,7 +187,77 @@ const orderSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  // Enhanced tracking fields
+  deliveryTracking: {
+    startedAt: Date,
+    estimatedPickupTime: Date,
+    actualPickupTime: Date,
+    estimatedDeliveryTime: Date,
+    actualDeliveryTime: Date,
+    deliveryDistance: Number, // in kilometers
+    deliveryRoute: {
+      type: {
+        type: String,
+        enum: ['LineString'],
+        default: 'LineString'
+      },
+      coordinates: {
+        type: [[Number]], // Array of [longitude, latitude] points
+        default: []
+      }
+    },
+    lastLocationUpdate: {
+      coordinates: [Number], // [longitude, latitude]
+      accuracy: Number,
+      timestamp: Date,
+      heading: Number,
+      speed: Number
+    }
+  },
+  // Delivery issues
+  deliveryIssues: [{
+    issueType: {
+      type: String,
+      enum: ['ORDER_DAMAGED', 'ADDRESS_NOT_FOUND', 'CUSTOMER_UNAVAILABLE', 'VEHICLE_BREAKDOWN', 'SAFETY_CONCERN', 'OTHER']
+    },
+    description: String,
+    images: [String],
+    reportedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    reportedAt: {
+      type: Date,
+      default: Date.now
+    },
+    resolved: {
+      type: Boolean,
+      default: false
+    },
+    resolution: {
+      resolvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      resolvedAt: Date,
+      notes: String
+    }
+  }],
+  // Delivery ETAs and time tracking
+  deliveryETAUpdates: [{
+    estimatedMinutes: Number,
+    newETA: Date,
+    reason: String,
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, { timestamps: true });
 
 // Create unique index for order number

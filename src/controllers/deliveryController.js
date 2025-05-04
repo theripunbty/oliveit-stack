@@ -69,14 +69,20 @@ const updateProfile = async (req, res) => {
 const updateLocation = async (req, res) => {
   try {
     const deliveryAgentId = req.user._id;
-    const { coordinates } = req.body;
+    const { coordinates, orderId, accuracy, speed, heading } = req.body;
     
     // Validate coordinates
     if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
       return sendError(res, 400, 'Valid coordinates are required [longitude, latitude]');
     }
     
-    // Update location
+    // Validate coordinates range
+    const [longitude, latitude] = coordinates;
+    if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
+      return sendError(res, 400, 'Coordinates out of valid range');
+    }
+
+    // Update location in database
     const deliveryAgent = await User.findByIdAndUpdate(
       deliveryAgentId,
       {
@@ -92,20 +98,152 @@ const updateLocation = async (req, res) => {
       return sendError(res, 404, 'Delivery agent not found');
     }
     
-    // Also update in Redis for real-time access
+    // Store full location data in Redis for real-time access (with more details)
+    const locationData = {
+      agentId: deliveryAgentId.toString(),
+      coordinates,
+      accuracy: accuracy || null,
+      speed: speed || null,
+      heading: heading || null,
+      updatedAt: new Date().toISOString()
+    };
+    
+    await redisClient.set(
+      `delivery_location:${deliveryAgentId}`,
+      JSON.stringify(locationData),
+      'EX',
+      300 // Expire in 5 minutes if not updated
+    );
+    
+    // If orderId is provided, update the order-specific location cache
+    if (orderId) {
+      await redisClient.set(
+        `order_delivery_location:${orderId}`,
+        JSON.stringify(locationData),
+        'EX',
+        300 // Expire in 5 minutes
+      );
+      
+      // Emit real-time update through Socket.IO if available
+      const io = req.app.get('socketio');
+      if (io) {
+        io.to(`order-${orderId}`).emit('delivery-location-updated', {
+          orderId,
+          location: locationData
+        });
+      }
+    }
+    
+    return sendSuccess(res, 200, 'Location updated successfully');
+  } catch (error) {
+    console.error('Error updating delivery location:', error);
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Batch update delivery agent locations (for more efficient location reporting)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const batchUpdateLocation = async (req, res) => {
+  try {
+    const deliveryAgentId = req.user._id;
+    const { locations } = req.body;
+    
+    // Validate locations array
+    if (!locations || !Array.isArray(locations) || locations.length === 0) {
+      return sendError(res, 400, 'Valid locations array is required');
+    }
+    
+    // Get the latest location from the batch (last one)
+    const latestLocation = locations[locations.length - 1];
+    const { coordinates, orderId, timestamp } = latestLocation;
+    
+    // Validate coordinates
+    if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
+      return sendError(res, 400, 'Valid coordinates are required [longitude, latitude]');
+    }
+    
+    // Update agent's location in database using the latest coordinates
+    await User.findByIdAndUpdate(
+      deliveryAgentId,
+      {
+        location: {
+          type: 'Point',
+          coordinates
+        }
+      }
+    );
+    
+    // Store all location points in Redis with TTL for location history
+    const locationKey = `delivery_location_history:${deliveryAgentId}`;
+    const locationData = {
+      agentId: deliveryAgentId.toString(),
+      locations: locations.map(loc => ({
+        coordinates: loc.coordinates,
+        timestamp: loc.timestamp || new Date().toISOString(),
+        accuracy: loc.accuracy || null,
+        speed: loc.speed || null,
+        heading: loc.heading || null
+      })),
+      updatedAt: new Date().toISOString()
+    };
+    
+    await redisClient.set(
+      locationKey,
+      JSON.stringify(locationData),
+      'EX',
+      3600 // Keep location history for 1 hour
+    );
+    
+    // Also update the current location in Redis
     await redisClient.set(
       `delivery_location:${deliveryAgentId}`,
       JSON.stringify({
-        agentId: deliveryAgentId,
+        agentId: deliveryAgentId.toString(),
         coordinates,
-        updatedAt: new Date()
+        accuracy: latestLocation.accuracy || null,
+        speed: latestLocation.speed || null,
+        heading: latestLocation.heading || null,
+        updatedAt: new Date().toISOString()
       }),
       'EX',
       300 // Expire in 5 minutes if not updated
     );
     
-    return sendSuccess(res, 200, 'Location updated successfully');
+    // If orderId is provided, update the order-specific location cache and emit Socket.IO event
+    if (orderId) {
+      const orderLocationData = {
+        agentId: deliveryAgentId.toString(),
+        coordinates,
+        accuracy: latestLocation.accuracy || null,
+        speed: latestLocation.speed || null,
+        heading: latestLocation.heading || null,
+        timestamp: timestamp || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      await redisClient.set(
+        `order_delivery_location:${orderId}`,
+        JSON.stringify(orderLocationData),
+        'EX',
+        300 // Expire in 5 minutes
+      );
+      
+      // Emit real-time update through Socket.IO if available
+      const io = req.app.get('socketio');
+      if (io) {
+        io.to(`order-${orderId}`).emit('delivery-location-updated', {
+          orderId,
+          location: orderLocationData
+        });
+      }
+    }
+    
+    return sendSuccess(res, 200, 'Location batch updated successfully');
   } catch (error) {
+    console.error('Error updating delivery locations in batch:', error);
     return handleApiError(res, error);
   }
 };
@@ -636,6 +774,296 @@ const getWallet = async (req, res) => {
   }
 };
 
+/**
+ * Report an issue with delivery
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const reportDeliveryIssue = async (req, res) => {
+  try {
+    const deliveryAgentId = req.user._id;
+    const orderId = req.params.id;
+    const { issueType, description, images } = req.body;
+    
+    // Validate required fields
+    if (!issueType || !description) {
+      return sendError(res, 400, 'Issue type and description are required');
+    }
+    
+    // Get order
+    const order = await Order.findOne({
+      _id: orderId,
+      deliveryAgent: deliveryAgentId
+    });
+    
+    if (!order) {
+      return sendError(res, 404, 'Order not found or not assigned to this delivery agent');
+    }
+    
+    // Add issue to order
+    order.deliveryIssues = order.deliveryIssues || [];
+    order.deliveryIssues.push({
+      issueType,
+      description,
+      images: images || [],
+      reportedBy: deliveryAgentId,
+      reportedAt: new Date()
+    });
+    
+    // Add status history entry
+    order.statusHistory.push({
+      status: order.status,
+      timestamp: new Date(),
+      updatedBy: deliveryAgentId,
+      notes: `Delivery issue reported: ${issueType} - ${description}`
+    });
+    
+    await order.save();
+    
+    // Notify admin and customer about the issue via Socket.IO
+    const io = req.app.get('socketio');
+    if (io) {
+      const issueData = {
+        orderId,
+        issueType,
+        description,
+        reportedAt: new Date().toISOString()
+      };
+      
+      // Notify customer
+      io.to(`customer-${order.customer}`).emit('delivery-issue-reported', issueData);
+      
+      // Notify admins
+      io.to('admin-channel').emit('delivery-issue-reported', {
+        ...issueData,
+        deliveryAgentId: deliveryAgentId.toString()
+      });
+    }
+    
+    return sendSuccess(res, 200, 'Delivery issue reported successfully', { order });
+  } catch (error) {
+    console.error('Error reporting delivery issue:', error);
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Update estimated time of arrival for an order
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const updateETA = async (req, res) => {
+  try {
+    const deliveryAgentId = req.user._id;
+    const orderId = req.params.id;
+    const { estimatedMinutes, reason } = req.body;
+    
+    // Validate required fields
+    if (!estimatedMinutes || isNaN(parseInt(estimatedMinutes))) {
+      return sendError(res, 400, 'Valid estimated minutes are required');
+    }
+    
+    // Get order
+    const order = await Order.findOne({
+      _id: orderId,
+      deliveryAgent: deliveryAgentId,
+      status: { $in: [ORDER_STATUS.PICKED_UP, ORDER_STATUS.IN_TRANSIT] }
+    });
+    
+    if (!order) {
+      return sendError(res, 404, 'Order not found or not in active delivery status');
+    }
+    
+    // Calculate new ETA
+    const eta = new Date();
+    eta.setMinutes(eta.getMinutes() + parseInt(estimatedMinutes));
+    
+    // Update order
+    order.estimatedDeliveryTime = eta;
+    
+    // Add status history entry
+    order.statusHistory.push({
+      status: order.status,
+      timestamp: new Date(),
+      updatedBy: deliveryAgentId,
+      notes: `Updated ETA: ${estimatedMinutes} minutes ${reason ? `(${reason})` : ''}`
+    });
+    
+    await order.save();
+    
+    // Notify customer about updated ETA via Socket.IO
+    const io = req.app.get('socketio');
+    if (io) {
+      io.to(`order-${orderId}`).emit('delivery-eta-updated', {
+        orderId,
+        estimatedMinutes: parseInt(estimatedMinutes),
+        estimatedDeliveryTime: eta.toISOString(),
+        reason: reason || 'Route updated'
+      });
+    }
+    
+    return sendSuccess(res, 200, 'Estimated delivery time updated successfully', { 
+      order,
+      estimatedDeliveryTime: eta
+    });
+  } catch (error) {
+    console.error('Error updating ETA:', error);
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Get delivery agent online status
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getOnlineStatus = async (req, res) => {
+  try {
+    const deliveryAgentId = req.user._id;
+    
+    // Get agent
+    const agent = await User.findById(deliveryAgentId).select('isOnline lastOnlineAt');
+    
+    if (!agent) {
+      return sendError(res, 404, 'Delivery agent not found');
+    }
+    
+    // Return status
+    return sendSuccess(res, 200, 'Online status retrieved successfully', {
+      isOnline: agent.isOnline || false,
+      lastOnlineAt: agent.lastOnlineAt
+    });
+  } catch (error) {
+    console.error('Error getting online status:', error);
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Update delivery agent online status
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const updateOnlineStatus = async (req, res) => {
+  try {
+    const deliveryAgentId = req.user._id;
+    const { isOnline } = req.body;
+    
+    // Validate input
+    if (typeof isOnline !== 'boolean') {
+      return sendError(res, 400, 'Valid isOnline boolean is required');
+    }
+    
+    // Update status
+    const agent = await User.findByIdAndUpdate(
+      deliveryAgentId,
+      {
+        isOnline,
+        lastOnlineAt: isOnline ? new Date() : undefined
+      },
+      { new: true }
+    ).select('-password -refreshToken');
+    
+    if (!agent) {
+      return sendError(res, 404, 'Delivery agent not found');
+    }
+    
+    // Also update in Redis for real-time availability checks
+    await redisClient.set(
+      `delivery_online:${deliveryAgentId}`,
+      JSON.stringify({
+        agentId: deliveryAgentId.toString(),
+        isOnline,
+        updatedAt: new Date().toISOString()
+      }),
+      'EX',
+      3600 // Expire in 1 hour
+    );
+    
+    return sendSuccess(res, 200, `Delivery agent is now ${isOnline ? 'online' : 'offline'}`);
+  } catch (error) {
+    console.error('Error updating online status:', error);
+    return handleApiError(res, error);
+  }
+};
+
+/**
+ * Request cashout for delivery agent earnings
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const requestCashout = async (req, res) => {
+  try {
+    const deliveryAgentId = req.user._id;
+    const { amount } = req.body;
+    
+    // Validate amount
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      return sendError(res, 400, 'Valid amount is required');
+    }
+    
+    const cashoutAmount = parseFloat(amount);
+    
+    // Start a session for transaction
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    
+    try {
+      // Get wallet balance
+      const wallet = await Wallet.findOne({ user: deliveryAgentId }).session(session);
+      
+      if (!wallet) {
+        await session.abortTransaction();
+        session.endSession();
+        return sendError(res, 404, 'Wallet not found');
+      }
+      
+      // Check if enough balance
+      if (wallet.balance < cashoutAmount) {
+        await session.abortTransaction();
+        session.endSession();
+        return sendError(res, 400, 'Insufficient wallet balance');
+      }
+      
+      // Create cashout transaction
+      const transaction = {
+        type: TRANSACTION_TYPES.DEBIT,
+        amount: cashoutAmount,
+        description: 'Cashout request',
+        category: TRANSACTION_CATEGORIES.CASHOUT,
+        status: 'pending',
+        reference: `CASHOUT-${Date.now()}`
+      };
+      
+      wallet.transactions.push(transaction);
+      
+      // Deduct from wallet balance
+      wallet.balance -= cashoutAmount;
+      
+      await wallet.save({ session });
+      
+      // Commit transaction
+      await session.commitTransaction();
+      session.endSession();
+      
+      return sendSuccess(res, 200, 'Cashout request submitted successfully', { 
+        transactionId: transaction._id,
+        amount: cashoutAmount,
+        newBalance: wallet.balance,
+        status: 'pending'
+      });
+    } catch (error) {
+      // Abort transaction on error
+      await session.abortTransaction();
+      session.endSession();
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error requesting cashout:', error);
+    return handleApiError(res, error);
+  }
+};
+
 // Create a DeliveryJobRejection model (simplified inline for this example)
 const DeliveryJobRejection = mongoose.model('DeliveryJobRejection', new mongoose.Schema({
   order: {
@@ -658,10 +1086,12 @@ const DeliveryJobRejection = mongoose.model('DeliveryJobRejection', new mongoose
   }
 }));
 
+// Export all controller functions
 module.exports = {
   getProfile,
   updateProfile,
   updateLocation,
+  batchUpdateLocation,
   getNearbyOrders,
   getAssignedOrders,
   getOrderDetails,
@@ -672,5 +1102,10 @@ module.exports = {
   getEarnings,
   getDeliveryHistory,
   rejectDeliveryJob,
-  getWallet
+  getWallet,
+  reportDeliveryIssue,
+  updateETA,
+  getOnlineStatus,
+  updateOnlineStatus,
+  requestCashout
 }; 
